@@ -1,0 +1,50 @@
+ESBOÇO. VERSÃO PRÉVIA PARA DELIBERAÇÕES E INCLUSÃO NA DOCUMENTAÇÃO
+
+
+-- Descritivo do Projeto:
+
+O objetivo do Projeto é criar uma POC (Proof of Concept ou Prova de Conceito) de um ambiente automatizado utilizando-se dispositivos de IoT controlados remotamente via um aplicativo de celular.
+
+A automação residencial e a interação entre os itens de IoT e o Dispositivo de Controle (Celular) será feita através de um microcontrolador ESP32.
+
+O Alarme (Sensores, Sirene e Leds), e o Módulo RFID serão controlados preferencialmente por um outro ESP32, e a comunicação entre ambos será via Serial (SPI). No caso de um evento de Alarme, uma Interrupção será acionada para avisar o ESP32 Central, o qual fará a leitura do status e passará vis rede para o Dispositivo de Controle. Se possível, devido a limitações de tempo, os Módulos de Automação e de Alarme ficarão em apenas um Microcontrolador ESP32
+
+Toda a comunicação entre a casa (seja para a Automação ou por Alarme) será idealmente feita via o processador ESP32 de automação. Se houver tempo para pesquisar e testar adequadamente, ambos os microcontroladores, de Automação e de Alarme, acessarão a nuvem para interagir com o Dispositivo de Controle.
+
+
+
+-- Funcionalidades do Projeto
+
+- O alarme receberá as informações dos 02 sensores PIR (infra-vermelho reflexivo) e do RFID e em caso de evento, ele verificará uma das possibilidades
+ a1 - O alarme está desligado - Ele não faz nada
+ a2 - Modo Passivo - Ele apenas avisa o dispositivo de controle
+ a3 - Modo Ativo - Ele Ativa a Sirene, Faz os leds vermelhos piscarem e avisa o dispositivo de controle
+ 
+- Se o RFID informar que a pessoa foi autorizada, ele informará o processador de automação que um determinado usuário se autenticou pela mesma maneira que um evento de disparo (a2), mas informará que foi uma ativação de entrada
+
+- O Módulo de Alarme poderá informar que uma porta ou janela foi inadvertidamente aberta enquanto o alarme estiver acionado...
+
+- O Módulo de Automação poderá informar solicitar ao Módulo de Alarme o status das portas/janelas
+ 
+- Se o sensor de chuva for acionado, o Módulo de Automação informará o dispositivo de controle e se a janela estiver aberta ela será fechada
+
+- Se o sensor de luminosidade informar que está escuro ele acionará as luzes externas (relé com a matriz de leds) e informará o Dispositivo de Controle
+
+- Existirão 3 usuários, identificados pelos códigos 01, 02 e 03. Tanto o RFID quanto o Dispositivo de Controle, ao informarem o usuário para o Módulo de Automação, ajustarão o Ambiente adquadamente. Atualmente o ambiente será  ajuste da iluminação. Se possível colocaremos a música também.
+
+- O Dispositivo de Controle poderá mudar o Condição do Alarme (a1, a2, a3) e ativar/desativar a sirene+leds
+
+- O dispositivo de controle poderá informar que o usuário está saindo (apagam as luzes) e chegando (ajusta o ambiente).
+
+- O dispositivo de controle poderá fechar/abrir janela e porta
+
+- Se a janela for aberta durante a chuva, ela só será fechada automaticamente se a chuva parar e começar novamente.
+
+OBS 1: Tota a inteligência será programa no(s) microcontrolador(es). O Dispositivo de controle apenas permitirá saber o status e interagir com os dispositivos da casa via WiFi através do(s) Microcontrolador(es).
+
+OBS 2: A comunicação Entre os Microcontroladores e o Dispositivo de Controle (Celular) será voia Nuvem da Blynk. utilizando HTTPS.
+
+
+
+
+
