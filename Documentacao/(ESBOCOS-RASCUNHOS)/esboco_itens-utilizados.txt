@@ -1,0 +1,59 @@
+ESBOÇO - ITENS QUE PRECISAREMOS PARA DAR ANDAMENTO AO PROJETO
+=============================================================
+Marcelo Costa / 01/02/2019
+
+
+01 - Central de Alarme:
+- 01 ESP32 para controlar o Alarme e o RFID
+- 02 kits Sensores de PIR
+- 01 Sirene com Led
+- 05 Leds vermelhos de alto-brilho
+- 04 reed switches NA (1 é de reserva)
+- 03 imãs para uso nestes Reeds
+- 01 Módulo de Relé
+- 02 Leds RGB Cátodo Comum (para apresentar estados do alarme e do RFID)
+
+
+02 - Automação
+- 01 ESP32 com 38 pinos
+- 10 Leds brancos de alto brilho
+- 04 Leds RGB Cátodo Comum (Lâmpadas da casa)
+- 01 Módulo RFID
+- 04 Tags RFID
+- 02 Motores de passo simples
+- 02 Módulos de Driver para Motor de Passo
+- 01 Módulo Sensor de Chuva
+- 01 Módulo Sensor LDR
+- 02 Módulo Sensor de Chuva
+- 01 Módulo Relé
+- 01 Módulo Switch MOS
+- 01 fonte 9A / 1A
+- 01 fonte 5A / 2A 
+
+
+03 - Itens Diversos
+- 10 resistores 50R
+- 10 resistores 100R
+- 10 Resistores 1K
+- 10 Resistores 10K
+- 03 Módulos Conversores lógicos 3.3v - 5v bidirecionais
+- 01 Módulo Step-Down 5v-3.3v 1A 
+- 40 Jumpers Fêmea-Fêmea 20cm
+- 40 Jumpers Macho-Fêmea 20cm
+- 40 Jumpers Macho-Macho de 20cm
+- 20 Jumpers Macho-Macho de 10cm
+- Maquete de Casa na Proporção 1:25 (R$ 130 com frete)
+- Recortes Adicionais de Madeira
+- Colas, Fitas Dupla-Face, Durex,...
+- Engrenagens, Cremalheiras, Pinos e Vigas da Lego
+
+
+04 - Itens Adicionals (Opcionais):
+- 01 Módulo de Relé
+- 01 Módulo MP3 para Arduino
+- 01 Alto-Falante
+- 01 Ponte-H
+- 02 Motores Simples
+- 02 Módulos de Interruputor Capacitivo
+- 01 Servo-Motor 180 graus.
+
