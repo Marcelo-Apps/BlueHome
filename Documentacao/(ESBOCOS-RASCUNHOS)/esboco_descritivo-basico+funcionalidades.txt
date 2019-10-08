@@ -1,54 +1,83 @@
 ESBOÇO - DESCRITIVO BÁSICO DO PROJETO E FUNCIONALIDADES DO PROJETO
 ==================================================================
-Marcelo Costa - 01/10/2019
 
-* VERSÃO PRÉVIA PARA DELIBERAÇÕES E INCLUSÃO NA DOCUMENTAÇÃO OFICIAL *
+
+* VERSÃO PRÉVIA ATUALIZADA PARA DELIBERAÇÕES E INCLUSÃO NA DOCUMENTAÇÃO OFICIAL *
 
 
 -- DESCRITIVO DO PROJETO
 
 O objetivo do Projeto é criar uma POC (Proof of Concept ou Prova de Conceito) de um ambiente automatizado utilizando-se dispositivos de IoT controlados remotamente via um aplicativo de celular.
 
-A automação residencial e a interação entre os itens de IoT e o Dispositivo de Controle (Celular) será feita através de um microcontrolador ESP32.
+A automação residencial e a interação entre os itens de IoT e o Dispositivo de Controle (Celular) será feita através de um ou dois microcontrolador(es) ESP32.
 
-O Alarme (Sensores, Sirene e Leds), e o Módulo RFID serão controlados preferencialmente por um outro ESP32, e a comunicação entre ambos será via Serial (SPI). No caso de um evento de Alarme, uma Interrupção será acionada para avisar o ESP32 Central, o qual fará a leitura do status e passará vis rede para o Dispositivo de Controle. Se possível, devido a limitações de tempo, os Módulos de Automação e de Alarme ficarão em apenas um Microcontrolador ESP32
 
-Toda a comunicação entre a casa (seja para a Automação ou por Alarme) será idealmente feita via o processador ESP32 de automação. Se houver tempo para pesquisar e testar adequadamente, ambos os microcontroladores, de Automação e de Alarme, acessarão a nuvem para interagir com o Dispositivo de Controle.
+TEMOS TRÊS POSSÍVEIS ABORDAGENS:
+
+1 - A comunicação/acionamento do alarme e itens adicionais controlados por estes será feita  pelo Processador de Alarme / A comunicação/acionamento dos itens de automação será feita pelo processador de automação. / *AMBOS OSA PROCESSADORES ACESSAM O MESMO CONTROLADOR DO BLYNK*
+
+ou
+
+2 - Toda a comunicação entre a casa (seja para a Automação ou por Alarme) e conseqüente acionamento será feito via o processador de Automação.
+
+ou
+
+3 - Ambos os Processadores, Alarme e Automação, estarão em um único Microcontrolador
+
+
+*OBS: QUALQUER que seja a abordagem utilizada (1, 2 ou 3), consideraremos os Processadores de Alarme e Automação como itens separados
+
+
+O Alarme (Sensores, Sirene e Leds), as Janelas (motores e sensores) e o Módulo RFID serão controlados pelo Processador de Alarme.
+
+Todos os outros sensores e dispisitivos serão controlados pelo Processador de Autonmação.
+
+A comunicação entre os Processadores de Alarme e de Automação se dará por meio de comunicação serial (SPI). O Módulo de alarme, se acionado, ou disparará uma Interrupção, ou sinalizará através de uma porta Digital (Input) do Processador de Automação.
 
 
 
 -- FUNCIONALIDADES DO PROJETO
 
-- O alarme receberá as informações dos 02 sensores PIR (infra-vermelho reflexivo) e do RFID e em caso de evento, ele verificará uma das possibilidades
- a1 - O alarme está desligado - Ele não faz nada
+- O Processador de Alarme receberá as informações dos 02 sensores PIR (infra-vermelho reflexivo) e do RFID, e em caso de evento (invasão de perímetro), ele verificará uma das possibilidades:
+ a1 - Modo Inativo - O alarme está desligado - Ele não faz nada
  a2 - Modo Passivo - Ele apenas avisa o dispositivo de controle
  a3 - Modo Ativo - Ele Ativa a Sirene, Faz os leds vermelhos piscarem e avisa o dispositivo de controle
- 
-- Se o RFID informar que a pessoa foi autorizada, ele informará o processador de automação que um determinado usuário se autenticou pela mesma maneira que um evento de disparo (a2), mas informará que foi uma ativação de entrada
 
-- O Módulo de Alarme poderá informar que uma porta ou janela foi inadvertidamente aberta enquanto o alarme estiver acionado...
+- O Processador de Alarme gerenciará o controle do status das janelas e da porta. Isto acontecerá monitorando-se uma porta conectada a um reed switch NA, com a outra "ponta" ligada no GND.
 
-- O Módulo de Automação poderá informar solicitar ao Módulo de Alarme o status das portas/janelas
- 
-- Se o sensor de chuva for acionado, o Módulo de Automação informará o dispositivo de controle e se a janela estiver aberta ela será fechada
+- Se o processador de Alarme não conseguir contactar o dispositivo de controle, ele automaticamente fechará as portas e janelas caso o alarme esteja no estado a3 (ver OBS 3)
 
-- Se o sensor de luminosidade informar que está escuro ele acionará as luzes externas (relé com a matriz de leds) e informará o Dispositivo de Controle
+- Temos um leitor de RFID para controle da entrada. Ele estará ligado ao processador de alarme. Se o RFID informar que a pessoa foi autorizada, o processador de alaarme informará o processador de automação que um determinado usuário se autenticou e ajustará os parâmetros de automação (luzes por enquanto) adequadamente.
 
 - Existirão 3 usuários, identificados pelos códigos 01, 02 e 03. Tanto o RFID quanto o Dispositivo de Controle, ao informarem o usuário para o Módulo de Automação, ajustarão o Ambiente adquadamente. Atualmente o ambiente será  ajuste da iluminação. Se possível colocaremos a música também.
 
-- O Dispositivo de Controle poderá mudar o Condição do Alarme (a1, a2, a3) e ativar/desativar a sirene+leds
+- O Módulo de Automação poderá solicitar ao Módulo de Alarme o status das portas/janelas.
+ 
+- Se o sensor de chuva for acionado, o Processador de Automação informará o dispositivo de controle, e se a janela estiver aberta será fechada. Se o usuário pedir para abrir as janelas durante a chuva, ele não a fechará novamente, a menos que a chuva pare e começe novamente.
 
-- O dispositivo de controle poderá informar que o usuário está saindo (apagam as luzes) e chegando (ajusta o ambiente).
+- Se o sensor de luminosidade informar que está escuro ao processador de Automação, ele acionará as luzes externas (relé com a matriz de leds) e informará o Dispositivo de Controle
 
-- O dispositivo de controle poderá fechar/abrir janela e porta
+- O dispositivo de Controle poderá mudar o Condição do Alarme (a1, a2, a3) e ativar/desativar a sirene+leds informando ao Processador de Alarme.
 
-- Se a janela for aberta durante a chuva, ela só será fechada automaticamente se a chuva parar e começar novamente.
-
-OBS 1: Tota a inteligência será programa no(s) microcontrolador(es). O Dispositivo de controle apenas permitirá saber o status e interagir com os dispositivos da casa via WiFi através do(s) Microcontrolador(es).
-
-OBS 2: A comunicação Entre os Microcontroladores e o Dispositivo de Controle (Celular) será voia Nuvem da Blynk. utilizando HTTPS.
+- O dispositivo de Controle poderá mudar o STATUS do alarme (DISPARADO / NÃO DISPARADO) passando uma mensagem para o Processador de Alarme.
 
 
+- O dispositivo de Controle poderá fechar/abrir Janelas e Portas informando ao Processador de Automação, que solicitará ao Processador de Alarme para fechar/abrir a respectiva porta/janela.
+
+- O dispositivo de Controle poderá informar que o usuário está saindo (apagam as luzes) e chegando (ajusta o ambiente). Se o alarme for acionado (colocado nos estados a2 ou a3), as luzes serão apagadas e as janelas fechadas.
+
+- Se a janela for aberta durante a chuva, ela só será fechada automaticamente novamente se a chuva parar e recomeçar.
+
+OBS 1: Toda a inteligência será programada nos Processadores. O Dispositivo de controle apenas permitirá saber o status e interagir com os dispositivos da casa via WiFi através Processadores.
+
+OBS 2: A comunicação Entre os Processadores e o Dispositivo de Controle (Celular) será via Nuvem da Blynk. utilizando HTTPS.
+
+OBS 3: Se a comunicação entre os Processadores e o Dispositivo de Controle falhar, ainda assim as tarefas básicas estarão funcionais (RFID, Alarmes,...) 
 
 
+
+HISTÓRICO:
+
+- 01/10/2019 - Release inicial
+- 07/10/2019 - Revisão 1
 

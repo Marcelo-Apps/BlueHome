@@ -4,12 +4,12 @@ Marcelo Costa / 01/02/2019
 
 
 01 - Central de Alarme:
-- 01 ESP32 para controlar o Alarme e o RFID
-- 02 kits Sensores de PIR
-- 01 Sirene com Led
+- 01 ESP32 para controlar o Alarme e o RFID (inicialmente utilizará o mesmo microcontrolador da automação)
+- 02 Módulos Sensores de PIR
+- 01 Sirene para alarme
 - 05 Leds vermelhos de alto-brilho
-- 04 reed switches NA (1 é de reserva)
-- 03 imãs para uso nestes Reeds
+- 04 Reed Switches NA (1 é de reserva)
+- 03 Imãs para uso nestes Reeds
 - 01 Módulo de Relé
 - 02 Leds RGB Cátodo Comum (para apresentar estados do alarme e do RFID)
 
@@ -24,11 +24,14 @@ Marcelo Costa / 01/02/2019
 - 02 Módulos de Driver para Motor de Passo
 - 01 Módulo Sensor de Chuva
 - 01 Módulo Sensor LDR
-- 02 Módulo Sensor de Chuva
 - 01 Módulo Relé
 - 01 Módulo Switch MOS
 - 01 fonte 9A / 1A
-- 01 fonte 5A / 2A 
+- 01 fonte 5A / 2A
+- 02 baterias 3,7V de Lítio Modelo 18650
+- 01 Case para 2 baterias de Lítio 18650 em série
+- 01 Módulo conversor de tensão 5V/3A
+
 
 
 03 - Itens Diversos
@@ -42,10 +45,12 @@ Marcelo Costa / 01/02/2019
 - 40 Jumpers Macho-Fêmea 20cm
 - 40 Jumpers Macho-Macho de 20cm
 - 20 Jumpers Macho-Macho de 10cm
+- 01 Switch on/off 3A
 - Maquete de Casa na Proporção 1:25 (R$ 130 com frete)
 - Recortes Adicionais de Madeira
 - Colas, Fitas Dupla-Face, Durex,...
 - Engrenagens, Cremalheiras, Pinos e Vigas da Lego
+
 
 
 04 - Itens Adicionals (Opcionais):
@@ -55,5 +60,4 @@ Marcelo Costa / 01/02/2019
 - 01 Ponte-H
 - 02 Motores Simples
 - 02 Módulos de Interruputor Capacitivo
-- 01 Servo-Motor 180 graus.
-
+- 01 Servo-Motor 180 graus
