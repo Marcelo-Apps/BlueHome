@@ -13,9 +13,8 @@
 #include <BlynkSimpleEsp32.h>
 
 // Parâmewtros wifi
-char ssid[] = "iMordor";
-char pass[] = "MyMordor2019!";
-
+char ssid[] = "WIFI-BH";
+char pass[] = "BlueHome.IoT.2019";
 
 // Chave de autenticação do Projeto no Blynk
 char auth[] = "g6W9NYbPd9pJR8eiZLU3JEkInTB_BXSu";      // Automação
