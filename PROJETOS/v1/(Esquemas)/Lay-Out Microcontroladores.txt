@@ -3,6 +3,7 @@ LAY-OUT DOS PINOS DOS MICROCONTROLADORES
 
 Revisões
 001 - Versão Inicial
+002 - Novos Itens / Correção led B
 
 
 
@@ -46,13 +47,13 @@ Revisões
 - Precisa incluir RFID
 - Precisa estabelecer comunicação serial
 
-23 - 
+23 - Relé Luz
 22 - 
 01 - 
-03 - RGB-B
+03 - 
 21 - RGB-R
 19 - RGB-G
-18 - 
+18 - RGB-B
 05 - 
 17---s2- tx
 16---s2- rx

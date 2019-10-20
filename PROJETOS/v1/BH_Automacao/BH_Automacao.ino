@@ -42,13 +42,14 @@ char auth[] = "Xk9Gxg4mK9pfkGEODlVaaqeyZdcNZLXZ";      // Automação
 
 
 
-#define PIN_SENSORLUZ              04
+#define PIN_SENSORLUZ              36
 #define PIN_SENSORCHUVA            T2     // D02
 #define PIN_SENSORJANELA           22
 #define PIN_SENSORPORTA            23
-#define PIN_LEDRED                 18
+#define PIN_LEDRED                 21
 #define PIN_LEDGREEN               19
-#define PIN_LEDBLUE                21
+#define PIN_LEDBLUE                18
+#define PIN_LUZEXTERNA             23
 
 #define PIN_AVISODOALARME          34
 
@@ -57,9 +58,12 @@ char auth[] = "Xk9Gxg4mK9pfkGEODlVaaqeyZdcNZLXZ";      // Automação
 #define PWM_LEDBLUE                02
 
 #define BLYNK_LCD                  V0
+#define BLYNK_JANELA              V11
+#define BLYNK_PORTA               V11
 #define BLYNK_LUZEXTERNA          V13
+#define BLYNK_LUZAUTOMATICA       V14                 
+#define BLYNK_IDUSUARIO           V15
 #define BLYNK_LUZINTERNA          V10
-
 
 
 
@@ -77,6 +81,9 @@ char auth[] = "Xk9Gxg4mK9pfkGEODlVaaqeyZdcNZLXZ";      // Automação
 // *VARIÁVEIS GLOBAIS*
 char *_lcdLin1;
 char *_lcdLin2;
+
+bool _atualSensorLuz, _atualLuzExt, _atualLuzAutomatica;
+bool _novoSensorLuz, _novoLuzExt, _novoLuzAutomatica;
 
 
 
@@ -101,9 +108,11 @@ void setup() {
   ledcSetup(PWM_LEDGREEN,PWM_FREQUENCIA,PWM_BITSRESOLUCAO);
   ledcSetup(PWM_LEDBLUE,PWM_FREQUENCIA,PWM_BITSRESOLUCAO);
 
-  ledcWrite(PWM_LEDRED,PWM_MIN);
-  ledcWrite(PWM_LEDGREEN,PWM_MIN);
-  ledcWrite(PWM_LEDBLUE,PWM_MIN);
+  pinMode(PIN_SENSORLUZ, INPUT);
+  pinMode(PIN_LUZEXTERNA, OUTPUT);
+
+  // Inicializa os parâmetros e ajustes iniciais
+  inicializaAjustes();
 
   // Inicializa o Blynk
   Blynk.begin(auth, ssid, pass);
@@ -114,6 +123,91 @@ void setup() {
 
 void loop() {
   Blynk.run();
+
+  verificaParamLuzAutomatica();
+  verificaSensorLuz();
+  atuaSensorLuz();
+
+  delay(100);
+}
+
+
+
+void inicializaAjustes (void) {
+  _atualSensorLuz=false;
+  _novoSensorLuz=false;
+  _atualLuzExt=false;
+  _novoLuzExt=false;
+  _atualLuzAutomatica=true;
+  _novoLuzAutomatica=true;
+  
+
+  _lcdLin1="";
+  _lcdLin2="";
+
+  digitalWrite(PIN_LUZEXTERNA,HIGH);
+
+  ledcWrite(PWM_LEDRED,PWM_MIN);
+  ledcWrite(PWM_LEDGREEN,PWM_MIN);
+  ledcWrite(PWM_LEDBLUE,PWM_MIN);
+
+}
+
+
+
+void verificaParamLuzAutomatica (void) {
+  if (_atualLuzAutomatica!=_novoLuzAutomatica) {
+#ifdef DEBUG
+     Serial.print("-- Mudou o Estado do Parâmetro Luz Automática");
+     Serial.print(" -- NOVO estado: ");
+     Serial.println(_novoLuzAutomatica);
+#endif
+  }
+}
+
+
+
+
+// Lê o sensor de Luz SE JÁ não estiver modificado
+void verificaSensorLuz (void) {
+  if (_atualSensorLuz==_novoSensorLuz) {
+    _novoSensorLuz=(digitalRead(PIN_SENSORLUZ)==HIGH);
+  }
+}
+
+
+// Atua no sensor de Luz SE Precisar
+void atuaSensorLuz (void) {
+  if ((_atualSensorLuz!=_novoSensorLuz)  || (_atualLuzAutomatica!=_novoLuzAutomatica)) {
+
+    // Faz a atribuição de Atual=Novo
+    _atualSensorLuz=_novoSensorLuz;
+    _atualLuzAutomatica=_novoLuzAutomatica;
+
+#ifdef DEBUG
+      Serial.println("-- Mudou o Estado do Sensor de Luz");
+#endif
+
+  if (_atualLuzAutomatica) {
+      // Executa a ação
+      if (_atualSensorLuz) {
+        digitalWrite(PIN_LUZEXTERNA,LOW);
+#ifdef DEBUG
+        Serial.println(" -- Ligou a Luz Externa");
+#endif
+      } else {
+        digitalWrite(PIN_LUZEXTERNA,HIGH);
+#ifdef DEBUG
+        Serial.println(" -- Desligou a Luz Externa");
+#endif
+      }
+    } else {
+#ifdef DEBUG
+      Serial.println(" -- *NÃO FEZ NADA -- LUZ AUTOMÁTICA ESTÁ DESLIGADA*");
+#endif
+    }
+  }
+
 }
 
 
@@ -160,4 +254,11 @@ BLYNK_WRITE(BLYNK_LUZINTERNA) {
   ledcWrite(PWM_LEDRED,red);
   ledcWrite(PWM_LEDGREEN,green);
   ledcWrite(PWM_LEDBLUE,blue);
+}
+
+
+
+// Apenas lê o conteúdo da Luz Automática (a atualização é no novo ciclo)
+BLYNK_WRITE(BLYNK_LUZAUTOMATICA) {
+  _novoLuzAutomatica=(param.asInt()!=0);
 }
