@@ -47,13 +47,13 @@ Revisões
 - Precisa incluir RFID
 - Precisa estabelecer comunicação serial
 
-23 - Relé Luz
-22 - 
-01 - 
+23 - SPI_MIOSI
+22 - SPI_RST
+01 - Relé Luz
 03 - 
-21 - RGB-R
-19 - RGB-G
-18 - RGB-B
+21 - SPI_SDA
+19 - SPI_MSIO
+18 - SPI_SCK
 05 - 
 17---s2- tx
 16---s2- rx
@@ -70,8 +70,8 @@ Revisões
 33 - 
 25 - 
 26 - 
-27 - 
-14 - 
-12 - 
+27 - RGB-B
+14 - RGB-G
+12 - RGB-R
 13 - (T4) - Sensor de Chuva
 

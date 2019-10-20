@@ -1,8 +1,8 @@
 /*
  * BLUE HOME - V1.0
  * 
- * PROCESSADOR DE AUTOMAÇÃO
- * ESP-32 COM 38 PINOS
+ * PROCESSADOR DE ALARME
+ * ESP-32 COM 30 PINOS
  * 
  * Autores: Marcelo Costa / Felipe Maia / Faberson Perfeito / Newton Dore
  * 
@@ -32,8 +32,8 @@ char pass[] = "BlueHome.IoT.2019";
 
 
 // Chave de autenticação do Projeto no Blynk
-char auth[] = "Xk9Gxg4mK9pfkGEODlVaaqeyZdcNZLXZ";      // Automação
-//char auth[] = "UhhrKzVPwBwg-ByLNCthYxpNMTZgK41l";      // Alarme
+//char auth[] = "Xk9Gxg4mK9pfkGEODlVaaqeyZdcNZLXZ";      // Automação
+char auth[] = "UhhrKzVPwBwg-ByLNCthYxpNMTZgK41l";      // Alarme
 
 // Pinos usados para outros fins
 // D16 -- U2_RX
@@ -47,48 +47,25 @@ char auth[] = "Xk9Gxg4mK9pfkGEODlVaaqeyZdcNZLXZ";      // Automação
 
 
 
-#define PIN_SENSORLUZ              36
-#define PIN_SENSORCHUVA            T2     // D02
-#define PIN_SENSORJANELA           22
-#define PIN_SENSORPORTA            23
-#define PIN_LEDRED                 12
-#define PIN_LEDGREEN               14
-#define PIN_LEDBLUE                27
-#define PIN_LUZEXTERNA              1
-
-#define PIN_LEITORCARD_SPI_SCK     18     // Apenas Reserva - SPI trata disto
-#define PIN_LEITORCARD_SPI_MSIO    19     // Apenas Reserva - SPI trata disto
-#define PIN_LEITORCARD_SPI_MIOSI   23     // Apenas Reserva - SPI trata disto
-#define PIN_LEITORCARD_SDA         21
-#define PIN_LEITORCARD_RST         22
-
- 
-#define SIZE_BUFFER     18
-#define MAX_SIZE_BLOCK  16
+#define PIN_SENSORPIR              36
+#define PIN_SENSORJANELA           35
+#define PIN_SENSORPORTA            34
+#define PIN_ALARME                  4
+#define PIN_MOTORJANELA_I1         23
+/// MAIS DEFINES
+/// MAIS DEFINES
+/// MAIS DEFINES
+/// MAIS DEFINES
 
 
-#define PIN_AVISODOALARME          34
 
-#define PWM_LEDRED                 00
-#define PWM_LEDGREEN               01
-#define PWM_LEDBLUE                02
 
 #define BLYNK_LCD                  V0
+
+
 #define BLYNK_JANELA              V11
-#define BLYNK_PORTA               V11
-#define BLYNK_LUZEXTERNA          V13
-#define BLYNK_LUZAUTOMATICA       V14                 
-#define BLYNK_IDUSUARIO           V15
-#define BLYNK_LUZINTERNA          V10
 
 
-
-
-#define PWM_FREQUENCIA           1000
-#define PWM_BITSRESOLUCAO           8
-#define PWW_LIMITE                256
-#define PWM_MIN                     0
-#define PWM_MAX                   255
 
 #define MOTOR_PASSOS-PORTA         20
 #define MOTOR_PASSOS-JANELA        25
@@ -102,9 +79,6 @@ bool _atualSensorLuz, _atualLuzExt, _atualLuzAutomatica;
 bool _novoSensorLuz, _novoLuzExt, _novoLuzAutomatica;
 
 
-//MFRC522 mfrc522(SS_PIN, RST_PIN);
-
-
 
 void setup() {
 
@@ -114,19 +88,14 @@ void setup() {
 #endif
 
   // INICIALIZAÇÃO DO AMBIENTE
-  pinMode(PIN_LEDRED, OUTPUT);
-  pinMode(PIN_LEDGREEN, OUTPUT);
-  pinMode(PIN_LEDBLUE, OUTPUT);
-  ledcAttachPin(PIN_LEDRED,PWM_LEDRED);
-  ledcAttachPin(PIN_LEDGREEN,PWM_LEDGREEN);
-  ledcAttachPin(PIN_LEDBLUE,PWM_LEDBLUE);
-  ledcSetup(PWM_LEDRED,PWM_FREQUENCIA,PWM_BITSRESOLUCAO);
-  ledcSetup(PWM_LEDGREEN,PWM_FREQUENCIA,PWM_BITSRESOLUCAO);
-  ledcSetup(PWM_LEDBLUE,PWM_FREQUENCIA,PWM_BITSRESOLUCAO);
+  pinMode(PIN_SENSORPIR, INPUT);
+// CONFIGURAR MAIS PINOS
+// CONFIGURAR MAIS PINOS
+// CONFIGURAR MAIS PINOS
+// CONFIGURAR MAIS PINOS
+// CONFIGURAR MAIS PINOS
 
-  pinMode(PIN_SENSORLUZ, INPUT);
-  pinMode(PIN_LUZEXTERNA, OUTPUT);
-
+  
   // Inicializa os parâmetros e ajustes iniciais
   inicializaAjustes();
 
@@ -162,10 +131,6 @@ void inicializaAjustes (void) {
   _lcdLin2="";
 
   digitalWrite(PIN_LUZEXTERNA,HIGH);
-
-  ledcWrite(PWM_LEDRED,PWM_MIN);
-  ledcWrite(PWM_LEDGREEN,PWM_MIN);
-  ledcWrite(PWM_LEDBLUE,PWM_MIN);
 
 }
 
@@ -238,6 +203,10 @@ void printLCD (char texto[]) {
   lcd.print(0,1,_lcdLin2);
 }
 
+
+
+
+///
 
 
 // Redefine o ambiente quando conectado.
