@@ -1,0 +1,76 @@
+LAY-OUT DOS PINOS DOS MICROCONTROLADORES
+========================================
+
+Revisões
+001 - Versão Inicial
+
+
+
+--> Lay-Out ESP32 Alarme
+*PINOS ÚTEIS*
+- Precisa estabelecer comunicação serial
+
+23 - M1-i1 (O)
+22 - M1-i2 (O)
+01 - M1-i3 (O)
+03 - M1-i4 (O)
+21 - M2-i1 (O)
+19 - M2-i2 (O)
+18 - M2-i3 (O)
+05 - M2-i4 (O)
+17---s2- tx
+16---s2- rx
+04 - ALARME (O)                                                                                                                                                                                                                           
+02 -  (ON-BOARD LED)
+15 -
+
+
+36 (i) - Sensor PIR (I)
+39 (i) - Reed-Switch M1 (I)
+34 (i) - Reed-Switch M2 (I)
+35 (i) - 
+32 - 
+33 - 
+25 - 
+26 - 
+27 - 
+14 - 
+12 - 
+13 - 
+
+
+
+
+--> Lay-Out ESP32 Automação
+*PINOS ÚTEIS*
+- Precisa incluir RFID
+- Precisa estabelecer comunicação serial
+
+23 - 
+22 - 
+01 - 
+03 - RGB-B
+21 - RGB-R
+19 - RGB-G
+18 - 
+05 - 
+17---s2- tx
+16---s2- rx
+04 -                                                                                                                                                                                                                            
+02    (ON-BOARD LED)
+15
+
+
+36 (i) - Sensor de Luminosidade
+39 (i) - Reed-Switch M1 (I)   - Ver se precisa
+34 (i) - Reed-Switch M2 (I)   - Ver se precisa
+35 (i) - 
+32 - 
+33 - 
+25 - 
+26 - 
+27 - 
+14 - 
+12 - 
+13 - (T4) - Sensor de Chuva
+

@@ -1,0 +1,141 @@
+NOTAS DOS PINOS E DICAS IMPORTANTES
+===================================
+ORIGEM: https://randomnerdtutorials.com/esp32-pinout-reference-gpios/
+
+
+
+--> Características dos pinos:
+IO	Inp	Out	Notes
+0	pulled up	OK	outputs PWM signal at boot
+1	TX pin	OK	debug output at boot
+2	OK	OK	connected to on-board LED
+3	OK	RX pin	HIGH at boot
+4	OK	OK	
+5	OK	OK	outputs PWM signal at boot
+6	x	x	connected to the integrated SPI flash
+7	x	x	connected to the integrated SPI flash
+8	x	x	connected to the integrated SPI flash
+9	x	x	connected to the integrated SPI flash
+10	x	x	connected to the integrated SPI flash
+11	x	x	connected to the integrated SPI flash
+12	OK	OK	boot fail if pulled high
+13	OK	OK	
+14	OK	OK	outputs PWM signal at boot
+15	OK	OK	outputs PWM signal at boot
+16	OK	OK	
+17	OK	OK	
+18	OK	OK	
+19	OK	OK	
+21	OK	OK	
+22	OK	OK	
+23	OK	OK	
+25	OK	OK	
+26	OK	OK	
+27	OK	OK	
+32	OK	OK	
+33	OK	OK	
+34	OK		input only
+35	OK		input only
+36	OK		input only
+39	OK		input only
+
+
+
+--> Capacitive touch GPIOs
+ T0 (GPIO 4)
+ T1 (GPIO 0)
+ T2 (GPIO 2)
+ T3 (GPIO 15)
+ T4 (GPIO 13)
+ T5 (GPIO 12)
+ T6 (GPIO 14)
+ T7 (GPIO 27)
+ T8 (GPIO 33)
+ T9 (GPIO 32)
+ 
+ 
+ 
+--> Quantidade de corrente por GPIO:
+ The absolute maximum current drawn per GPIO is 40mA 
+
+
+
+--> *IMPORTANTE* - Pins HIGH at Boot:
+ Some GPIOs change its state to HIGH or output PWM signals at boot or reset. This means that if you have outputs connected to these GPIOs you may get unexpected results when the ESP32 resets or boots.
+ - GPIO 1
+ - GPIO 3
+ - GPIO 5
+ - GPIO 6 to GPIO 11 (connected to the ESP32 integrated SPI flash memory – not recommended to use).
+ - GPIO 14
+ - GPIO 15
+
+
+
+--> Interrupts:
+HOW-TO:  https://randomnerdtutorials.com/esp32-pir-motion-sensor-interrupts-timers/
+All GPIOs can be configured as interrupts.
+
+
+
+--> I2C:
+HOW-TO: https://randomnerdtutorials.com/esp32-i2c-communication-arduino-ide/
+The ESP32 has two I2C channels and any pin can be set as SDA or SCL. When using the ESP32 with the Arduino IDE, the default I2C pins are:
+ GPIO 21 (SDA)
+ GPIO 22 (SCL)
+If you want to use other pins, when using the wire library, you just need to call:
+  Wire.begin(SDA, SCL);
+
+
+
+--> ADC Converters:
+HOW-TO: https://randomnerdtutorials.com/esp32-adc-analog-read-arduino-ide/
+
+The ESP32 has 18 x 12 bits ADC input channels (while the ESP8266 only has 1x 10 bits ADC). These are the GPIOs that can be used as ADC and respective channels:
+
+ ADC1_CH0 (GPIO 36)
+ ADC1_CH1 (GPIO 37)
+ ADC1_CH2 (GPIO 38)
+ ADC1_CH3 (GPIO 39)
+ ADC1_CH4 (GPIO 32)
+ ADC1_CH5 (GPIO 33)
+ ADC1_CH6 (GPIO 34)
+ ADC1_CH7 (GPIO 35)
+ ADC2_CH0 (GPIO 4)
+ ADC2_CH1 (GPIO 0)
+ ADC2_CH2 (GPIO 2)
+ ADC2_CH3 (GPIO 15)
+ ADC2_CH4 (GPIO 13)
+ ADC2_CH5 (GPIO 12)
+ ADC2_CH6 (GPIO 14)
+ ADC2_CH7 (GPIO 27)
+ ADC2_CH8 (GPIO 25)
+ ADC2_CH9 (GPIO 26)
+
+
+
+--> SPI:
+By default, the pin mapping for SPI is:
+SPI		MOSI		MISO		CLK			CS
+VSPI	GPIO 23		GPIO 19		GPIO 18	GPIO 5
+HSPI	GPIO 13		GPIO 12		GPIO 14		GPIO 15
+
+
+
+
+------------- NOTAS PARA HABILITAR A SEGUNDA SERIAL -------------
+
+ORIGEM: https://www.dobitaobyte.com.br/tres-maneiras-de-configurar-a-segunda-serial-do-esp32/
+
+
+Resumo:
+
+Configurar a segunda serial do ESP32 pela API do Arduino
+
+Esse é o mais comum:
+
+C++
+void setup(){
+    Serial.begin(115200);
+    Serial1.begin(115200);
+}
+
