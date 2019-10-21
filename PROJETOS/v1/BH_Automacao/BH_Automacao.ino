@@ -22,8 +22,8 @@
 #include <WiFi.h>
 #include <WiFiClient.h>
 #include <BlynkSimpleEsp32.h>
-#include <SPI.h>
-#include <MFRC522.h>
+//#include <SPI.h>
+//#include <MFRC522.h>
 
 
 // Parâmetros da Wi-Fi
@@ -54,7 +54,7 @@ char auth[] = "Xk9Gxg4mK9pfkGEODlVaaqeyZdcNZLXZ";      // Automação
 #define PIN_LEDRED                 12
 #define PIN_LEDGREEN               14
 #define PIN_LEDBLUE                27
-#define PIN_LUZEXTERNA              1
+#define PIN_LUZEXTERNA              5
 
 #define PIN_LEITORCARD_SPI_SCK     18     // Apenas Reserva - SPI trata disto
 #define PIN_LEITORCARD_SPI_MSIO    19     // Apenas Reserva - SPI trata disto
@@ -208,11 +208,16 @@ void atuaSensorLuz (void) {
       // Executa a ação
       if (_atualSensorLuz) {
         digitalWrite(PIN_LUZEXTERNA,LOW);
+        Blynk.virtualWrite(BLYNK_LUZEXTERNA,LOW);
+        printLCD("Luz.Ext. Ligada");
 #ifdef DEBUG
         Serial.println(" -- Ligou a Luz Externa");
 #endif
       } else {
         digitalWrite(PIN_LUZEXTERNA,HIGH);
+        Blynk.virtualWrite(BLYNK_LUZEXTERNA,HIGH);
+        printLCD("Luz.Ext. Deslig.");
+       
 #ifdef DEBUG
         Serial.println(" -- Desligou a Luz Externa");
 #endif
