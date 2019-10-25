@@ -2,7 +2,7 @@
 //#include <SPI.h> 
  
 // Inicializa
-RH_ASK driver(2000,23,22,5,false);
+RH_ASK driver(2000,16,17,1,false);
 
  
 void setup()

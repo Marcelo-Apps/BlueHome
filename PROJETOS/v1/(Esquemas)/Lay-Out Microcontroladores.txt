@@ -11,33 +11,32 @@ Revisões
 *PINOS ÚTEIS*
 - Precisa estabelecer comunicação serial
 
-23 - M1-i1 (O)
-22 - M1-i2 (O)
-01 - M1-i3 (O)
-03 - M1-i4 (O)
-21 - M2-i1 (O)
-19 - M2-i2 (O)
-18 - M2-i3 (O)
-05 - M2-i4 (O)
-17---s2- tx
-16---s2- rx
-04 - ALARME (O)                                                                                                                                                                                                                           
-02 -  (ON-BOARD LED)
-15 -
+23 - MP_i4 (O)
+22 - 
+03 - 
+21 - 
+19 - MP-i3 (O)
+18 - MP_i2(O)
+05 - 
+17 - SERIAL - *reservado* (S2-TX)
+16 - SERIAL - RF RECEBIMENTO AUT-ALA (S2-RX)
+04 -                                                                                                                                                                                                                            
+02 - MO_i1 (O)   (ON-BOARD LED)
+15 - RELÉ ALARME (O)
 
 
 36 (i) - Sensor PIR (I)
-39 (i) - Reed-Switch M1 (I)
-34 (i) - Reed-Switch M2 (I)
-35 (i) - 
+39 (i) - 
+34 (i) - Reed-Switch Porta (I)
+35 (i) - Reed-Switch Janela (I)
 32 - 
 33 - 
 25 - 
 26 - 
-27 - 
-14 - 
-12 - 
-13 - 
+27 - MJ_i1 (O)
+14 - MJ_i2 (O)
+12 - MJ_i3 (O)
+13 - MJ_i4 (O)
 
 
 
@@ -47,19 +46,22 @@ Revisões
 - Precisa incluir RFID
 - Precisa estabelecer comunicação serial
 
-23 - SPI_MIOSI
-22 - SPI_RST
-01 - Relé Luz
-03 - 
-21 - SPI_SDA
-19 - SPI_MSIO
-18 - SPI_SCK
-05 - 
-17---s2- tx
-16---s2- rx
-04 -                                                                                                                                                                                                                            
+23 - RFID - SPI_MOSI     (CINZA)
+22 - RFID - SSPI_RST     (VERMELHO)
+03 - RFID - LED VERMELHO (ROXO)
+21 - RFID - SSPI_SDA     (BRANCO)
+19 - RFID - SSPI_MISO    (VERDE)
+18 - RFID - SSPI_SCK     (LARANJA)
+05 - RFID - LED VERDE    (MARROM)
+17 - SERIAL - RF ENVIO ALAUT-ALA (S2-TX) (O)
+16 - SERIAL - *reservado* (S2-RX)
+04 - RELÉ LUZ EXTERNA (O)                                                                                                                                                                                                                          
 02    (ON-BOARD LED)
 15
+
+
+RFID - VCC (AMARELO)
+RFID - GND  (PRETO)
 
 
 36 (i) - Sensor de Luminosidade
@@ -70,8 +72,8 @@ Revisões
 33 - 
 25 - 
 26 - 
-27 - RGB-B
-14 - RGB-G
-12 - RGB-R
-13 - (T4) - Sensor de Chuva
+27 - RGB-B (O)
+14 - RGB-G (O)
+12 - RGB-R (O)
+13 - (T4) - Sensor de Chuva (I,TOUCH)
 
