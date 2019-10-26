@@ -28,6 +28,8 @@
 #include <BlynkSimpleEsp32.h>
 #include <SPI.h>
 #include <MFRC522.h>
+#include <HardwareSerial.h>
+
 
 
 // Parâmetros da Wi-Fi
@@ -97,34 +99,52 @@ char auth[] = "Xk9Gxg4mK9pfkGEODlVaaqeyZdcNZLXZ";      // Automação
 
 // Pinos Virtuais e Definições do Blynk
 #define BLYNK_LCD                  V0
+#define BLYNK_LUZINT_R             V1
+#define BLYNK_LUZINT_G             V2
+#define BLYNK_LUZINT_B             V3
+
 #define BLYNK_JANELA              V11
 #define BLYNK_PORTA               V11
 #define BLYNK_LUZEXTERNA          V13
 #define BLYNK_LUZAUTOMATICA       V14                 
 #define BLYNK_IDUSUARIO           V15
-#define BLYNK_LUZINTERNA          V10
+//#define BLYNK_LUZINTERNA         10
 
-#define RFID_MAXERROS               3
+#define RFID_MAXERROS               3      // Máximo de erros do RFID antes de gerar um Alarme 
+
+#define SERIALRF_VELOCIDADE       750      // Velocidade da Serial de RF (entre Microcontroladores)
 
 
 //#define SIZE_BUFFER     18
 //#define MAX_SIZE_BLOCK  16
 
 
-// *VARIÁVEIS GLOBAIS*
-char *_lcdLin1;
-char *_lcdLin2;
+
+// ** VARIÁVEIS GLOBAIS **
+
+String _lcdLin1, _lcdLin2;
+
 
 bool _atualSensorLuz, _atualLuzExt, _atualLuzAutomatica, _atualLuzManual, _atualSensorChuva;
 bool _novoSensorLuz, _novoLuzExt, _novoLuzAutomatica, _novoLuzManual, _novoSensorChuva;
 
-int _atualMorador;
-int _novoMorador;
+int _atualMorador, _novoLuzR, _novoLuzG, _novoLuzB;
+int _novoMorador, _atualLuzR, _atualLuzG, _atualLuzB;
 
 int _acaoAlarme, _numErrosRfid;
 
+String _moradorNome;
+
+
+
+
+// ** CLASSES **
+
 // Inicializa o RFID
 MFRC522 rfid(PIN_LEITORCARD_SDA,PIN_LEITORCARD_RST);
+
+// Inicializa a serial para comunicação RF entre Automação e Alarme
+HardwareSerial TxSerial(1);
 
 
 
@@ -151,11 +171,19 @@ void setup() {
   inicializaContexto();
 
   // Inicializa o RFID
-  SPI.begin();     
-  rfid.PCD_Init(); 
+  SPI.begin();
+  rfid.PCD_Init();
 #ifdef DEBUG
-  Serial.println("Leitor de RFID habilitado");
-#endif  
+  Serial.println("Código do Leitor RFID inicializado.");
+#endif
+
+  // Inicializa a Serial entre Automação e Alarme
+  TxSerial.begin(SERIALRF_VELOCIDADE,SERIAL_6E2,16,17);   // (BR,Prot,RX,TX);
+#ifdef DEBUG
+  Serial.println("Serial entre Automação e Alarme Inicializada (via Sinal de RF)");
+  Serial.println("velocidade (bps): "+String(SERIALRF_VELOCIDADE));
+#endif
+
 
 #ifndef SEMBLYNK
   // Inicializa o Blynk
@@ -171,12 +199,14 @@ void loop() {
 #endif
 
   verificaRFID();
-
+  enviaMensagensAlarme();
+  ajustaAmbienteMorador();
+  ajustaLuzInterna();
   verificaParamLuzAutomatica();
   verificaSensorLuz();
-  atuaSensorLuz();
+  ajustaSensorLuz();
 
-  delay(100);
+  delay(50);
 }
 
 
@@ -194,8 +224,16 @@ void inicializaContexto (void) {
   _novoSensorChuva=false;
   _atualMorador=0;
   _novoMorador=0;
+  _atualLuzR=-1;         // É assim mesmo... Para ajustar a luz na primeira vez
+  _atualLuzG=-1;
+  _atualLuzB=-1;
+  _novoLuzR=0;
+  _novoLuzG=0;
+  _novoLuzB=0;
   _acaoAlarme=ALARME_SEMACAO;
   _numErrosRfid=0;
+  
+  _moradorNome="";
 
   _lcdLin1="";
   _lcdLin2="";
@@ -209,28 +247,33 @@ void inicializaContexto (void) {
 
 
 
+// A rotina 
 void verificaRFID (void) {
-
+  
   if ((rfid.PICC_IsNewCardPresent()) && (rfid.PICC_ReadCardSerial())) {
     String chave = "";
 
 #ifdef DEBUG
-    Serial.print("-- TAG RFID Inserida - Código: ");
+    Serial.print("-- ***TAG RFID Inserida - Código: ");
 #endif
-    for (byte i = 0; i < rfid.uid.size; i++) {
-      chave.concat(String(rfid.uid.uidByte[i] < 0x10 ? " 0" : " "));
-      chave.concat(String(rfid.uid.uidByte[i], HEX));
+
+    for (byte ind=0;ind<rfid.uid.size;ind++) {
+      int num=rfid.uid.uidByte[ind];
+      if (ind!=0) chave.concat(".");
+      if (num<0x10) chave.concat("0");
+      chave.concat(String(num,HEX));
     }
 #ifdef DEBUG
-    Serial.println("."+chave+".");
+    Serial.println("("+chave+")");
 #endif
+    
     rfid.PICC_HaltA();
 
-    if (chave==" 17 86 7d 26") {
+    if (chave=="17.86.7d.26") {
       _novoMorador=1;
-    } else if (chave==" 79 52 99 02") {
+    } else if (chave=="79.52.99.02") {
       _novoMorador=2;
-    } else if (chave==" c7 74 1a 26") {
+    } else if (chave=="c7.74.1a.26") {
       _novoMorador=3;
     } else {
       _novoMorador=0;
@@ -238,21 +281,25 @@ void verificaRFID (void) {
 
     if (_novoMorador!=0) {
       _numErrosRfid=0;
-      _acaoAlarme=ALARME_SEMACAO;
+      _acaoAlarme=ALARME_DESATIVA;
+//      printLCD("OK: "+chave);
 #ifdef DEBUG
       Serial.print(" -- RFID Autorizado: Usuário: ");
       Serial.println(_novoMorador);
 #endif
     } else {
       _numErrosRfid++;
+       printLCD("ERR: "+chave);
+       printLCD("Tag Invalido ("+String(_numErrosRfid)+")");
 #ifdef DEBUG
       Serial.print(" -- RFID *INVÁLIDO* -- TENTATIVAS COM ERRO: ");
       Serial.println(_numErrosRfid);
 #endif
       if (_numErrosRfid==RFID_MAXERROS) {
         _acaoAlarme=ALARME_TOCAR;
+       printLCD("**Alarme Acionado**");
 #ifdef DEBUG
-      Serial.print(" -- *** Excedeu Número de Acessos Inválidos - VAI DISPARARA O ALARME ***");
+      Serial.println(" -- *** Excedeu Número de Acessos Inválidos - VAI DISPARAR O ALARME ***");
 #endif
       }
     }
@@ -261,12 +308,86 @@ void verificaRFID (void) {
 
 
 
+void enviaMensagensAlarme () {
+  if (_acaoAlarme!=0) {
+      String texto = "...........#:"+String(_acaoAlarme)+":# ";
+
+      TxSerial.flush();
+      TxSerial.print(texto);
+#ifdef DEBUG
+      Serial.println("-- Enviada Mensagem para Processador de Alarme via RF: "+texto);
+#endif
+  // Avisa que não tem mais Ações de Alarme
+  _acaoAlarme=0;
+  }
+}
+
+
+
+void ajustaAmbienteMorador () {
+  if ((_novoMorador!=0) && (_atualMorador!=_novoMorador)) {
+    
+#ifdef DEBUG
+    Serial.println("--Mudou de Morador. Era: "+String(_atualMorador)+", e agora é: "+String(_novoMorador));
+#endif
+     _atualMorador=_novoMorador;
+    // ** Parâmetros Fixados no Código - Apenas para POC
+    if (_atualMorador==1) {
+      _novoLuzR=200;
+      _novoLuzG=255;
+      _novoLuzB=0;
+      _moradorNome="Marcelo";
+    } else if (_atualMorador==2) {
+      _novoLuzR=255;
+      _novoLuzG=50;
+      _novoLuzB=50;
+      _moradorNome="Felipe";
+    } else if (_atualMorador==3) {
+      _novoLuzR=100;
+      _novoLuzG=100;
+      _novoLuzB=255;
+      _moradorNome="Faberson";
+    } else {
+      _novoLuzR=0;
+      _novoLuzG=0;
+      _novoLuzB=0;
+      _moradorNome="";
+    }
+
+    if (_moradorNome!="") {
+    printLCD("Ola "+_moradorNome);
+    }
+  }
+}
+
+
+void ajustaLuzInterna () {
+  if ((_atualLuzR!=_novoLuzR) || (_atualLuzG!=_novoLuzG) || (_atualLuzB!=_novoLuzB)) {
+    // Ajusta a cor...
+    _atualLuzR=_novoLuzR;
+    _atualLuzG=_novoLuzG;
+    _atualLuzB=_novoLuzB;
+    
+    ledcWrite(PWM_LEDRED,_atualLuzR);
+    ledcWrite(PWM_LEDGREEN,_atualLuzG);
+    ledcWrite(PWM_LEDBLUE,_atualLuzB);
+
+    Blynk.virtualWrite(BLYNK_LUZINT_R,_atualLuzR);
+    Blynk.virtualWrite(BLYNK_LUZINT_G,_atualLuzG);
+    Blynk.virtualWrite(BLYNK_LUZINT_B,_atualLuzB);
+#ifdef DEBUG
+    Serial.println("--Ajustou a Luz Interna: (R: "+String(_novoLuzR)+", G: "+String(_novoLuzG)+", B: "+String(_novoLuzB)+")");
+#endif
+  }
+}
+
+
+
 void verificaParamLuzAutomatica (void) {
   if (_atualLuzAutomatica!=_novoLuzAutomatica) {
 #ifdef DEBUG
-     Serial.print("-- Mudou o Estado do Parâmetro Luz Automática");
-     Serial.print(" -- NOVO estado: ");
-     Serial.println(_novoLuzAutomatica);
+     Serial.println("-- Mudou o Estado do Parâmetro Luz Automática");
+     Serial.println(" -- NOVO estado: "+String(_novoLuzAutomatica));
 #endif
   }
 }
@@ -283,7 +404,7 @@ void verificaSensorLuz (void) {
 
 
 // Atua no sensor de Luz SE Precisar
-void atuaSensorLuz (void) {
+void ajustaSensorLuz (void) {
   if ((_atualSensorLuz!=_novoSensorLuz)  || (_atualLuzAutomatica!=_novoLuzAutomatica)) {
 
     // Faz a atribuição de Atual=Novo
@@ -341,7 +462,7 @@ void atuaLuzManual (void) {
 }
 
 
-void printLCD (char texto[]) {
+void printLCD (String texto) {
 #ifndef SEMBLYNK
   WidgetLCD lcd(V0);
 
@@ -363,6 +484,39 @@ BLYNK_CONNECTED () {
 }
 
 
+
+
+// Mudança da Luz - Vermelha (R)
+BLYNK_WRITE(BLYNK_LUZINT_R) {
+  _novoLuzR=param.asInt();
+#ifdef DEBUG
+  Serial.println(" - Cor: Novo R: "+String(_novoLuzR));
+#endif  
+}
+
+
+
+// Mudança da Luz - Verde (G)
+BLYNK_WRITE(BLYNK_LUZINT_G) {
+  _novoLuzG=param.asInt();
+#ifdef DEBUG
+  Serial.println(" - Cor: Novo G: "+String(_novoLuzG));
+#endif  
+}
+
+
+
+// Mudança da Luz - Azul (B)
+BLYNK_WRITE(BLYNK_LUZINT_B) {
+  _novoLuzB=param.asInt();
+#ifdef DEBUG
+  Serial.println(" - Cor: Novo B: "+String(_novoLuzB));
+#endif    
+}
+
+
+
+/*
 
 // MUDANÇA DE COR DA LUZ INTERNA
 BLYNK_WRITE(BLYNK_LUZINTERNA) {
@@ -388,7 +542,7 @@ BLYNK_WRITE(BLYNK_LUZINTERNA) {
 }
 
 
-
+*/
 // Apenas lê o conteúdo da Luz Automática (a atualização é no novo ciclo)
 BLYNK_WRITE(BLYNK_LUZAUTOMATICA) {
   _novoLuzAutomatica=(param.asInt()!=0);
