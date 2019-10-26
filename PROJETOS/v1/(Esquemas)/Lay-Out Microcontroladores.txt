@@ -13,6 +13,7 @@ Revisões
 
 23 - MP_i4 (O)
 22 - 
+01 - 
 03 - 
 21 - 
 19 - MP-i3 (O)
@@ -46,13 +47,14 @@ Revisões
 - Precisa incluir RFID
 - Precisa estabelecer comunicação serial
 
-23 - RFID - SPI_MOSI     (CINZA)
-22 - RFID - SSPI_RST     (VERMELHO)
-03 - RFID - LED VERMELHO (ROXO)
-21 - RFID - SSPI_SDA     (BRANCO)
-19 - RFID - SSPI_MISO    (VERDE)
-18 - RFID - SSPI_SCK     (LARANJA)
-05 - RFID - LED VERDE    (MARROM)
+23 - RFID - SPI_MOSI     (MARROM)
+22 - RFID - SSPI_RST     (BRANCO)
+01 - 
+03 - RFID - LED VERMELHO (VEFRMELHO)
+21 - RFID - SSPI_SDA     (LARANJA)
+19 - RFID - SSPI_MISO    (CINZA)
+18 - RFID - SSPI_SCK     (VERDE)
+05 - RFID - LED VERDE     (ROXO)
 17 - SERIAL - RF ENVIO ALAUT-ALA (S2-TX) (O)
 16 - SERIAL - *reservado* (S2-RX)
 04 - RELÉ LUZ EXTERNA (O)                                                                                                                                                                                                                          
@@ -60,14 +62,14 @@ Revisões
 15
 
 
-RFID - VCC (AMARELO)
+RFID - VCC 3V3 (AMARELO)
 RFID - GND  (PRETO)
 
 
-36 (i) - Sensor de Luminosidade
-39 (i) - Reed-Switch M1 (I)   - Ver se precisa
-34 (i) - Reed-Switch M2 (I)   - Ver se precisa
-35 (i) - 
+36 (i) - Sensor de Luminosidade (I)
+39 (i) - 
+34 (i) - Reed-Switch Porta (I)  - Ver se precisa
+35 (i) - Reed-Switch Janela (I)  - Ver se precisa
 32 - 
 33 - 
 25 - 
