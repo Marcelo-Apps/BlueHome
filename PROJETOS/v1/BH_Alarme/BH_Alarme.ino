@@ -57,8 +57,27 @@ char auth[] = "UhhrKzVPwBwg-ByLNCthYxpNMTZgK41l";      // Alarme
 #define PIN_MOTORPORTA_I3         19
 #define PIN_MOTORPORTA_I4         23
 
+// Pinos da comunicação entre Processadores
+#define PIN_SERIAL_COMUNIC_RX      16
+#define PIN_SERIAL_COMUNIC_TX      17
+
+// Mensagens da Automacão para Alarme (RF)
+#define ALARME_SEMACAO              0
+#define ALARME_DESATIVA             1
+#define ALARME_ATIVA                2
+#define ALARME_ATIVASILENCIOSO      3 
+#define ALARME_TOCAR                4
+#define ALARME_PARATOCAR            5
+#define ALARME_ABREPORTA            6
+#define ALARME_FECHAPORTA           7
+#define ALARME_ABREJANELA           8
+#define ALARME_FECHAJANELA          9
+
+
+// Pinos Virtuais e Definições do Blynk
 #define BLYNK_LCD                  V0
 #define BLYNK_JANELA              V11
+
 
 // *VARIÁVEIS GLOBAIS*
 char *_lcdLin1;
