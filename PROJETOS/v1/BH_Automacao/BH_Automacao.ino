@@ -277,7 +277,7 @@ void inicializaContexto (void) {
   
   _enviaMsgParaAlarme(ALARME_DESATIVA);
   _enviaMsgParaAlarme(ALARME_FECHAPORTA);
-  _enviaMsgParaAlarme(ALARME_FECHAJANELA);
+  _enviaMsgParaAlarme(ALARME_FECHAJANELA);  
   
   // Coloca o RFID em modo Halt (por garantia)
    rfid.PICC_HaltA(); 
@@ -311,6 +311,7 @@ int _BoolToEstado (bool valor) {
 
 
 
+// Verifica se tem um cartao na leitora
 void verificaRFID (void) {
   
   if ((rfid.PICC_IsNewCardPresent()) && (rfid.PICC_ReadCardSerial())) {
