@@ -13,10 +13,11 @@
 // Se estiver definido não inicializa/processa o BLYNK
 #define SEMBLYNK
 
+// Se estiver definido não inicializa/processa o SERIAL
+#define SEMSERIAL
 
 // Se é depuração (gera conteudo na serial para análise)
 #define DEBUG
-
 
 #ifdef DEBUG
 #define BLYNK_PRINT Serial
@@ -24,7 +25,9 @@
 
 #include <WiFi.h>
 #include <WiFiClient.h>
-#include <BlynkSimpleEsp32.h>
+#ifndef SEMBLYNK
+  #include <BlynkSimpleEsp32.h>
+#endif
 #include <SPI.h>
 #include <Stepper.h> //INCLUSÃO DE BIBLIOTECA MOTORES
 
@@ -58,6 +61,7 @@ char auth[] = "UhhrKzVPwBwg-ByLNCthYxpNMTZgK41l";      // Alarme
 #define PIN_MOTORPORTA_I4         23
 
 // Pinos da comunicação entre Processadores
+#ifdef SEMSERIAL
 #define PIN_SERIAL_COMUNIC_RX      16
 #define PIN_SERIAL_COMUNIC_TX      17
 
@@ -72,7 +76,7 @@ char auth[] = "UhhrKzVPwBwg-ByLNCthYxpNMTZgK41l";      // Alarme
 #define ALARME_FECHAPORTA           7
 #define ALARME_ABREJANELA           8
 #define ALARME_FECHAJANELA          9
-
+#endif
 
 // Pinos Virtuais e Definições do Blynk
 #define BLYNK_LCD                  V0
@@ -82,9 +86,6 @@ char auth[] = "UhhrKzVPwBwg-ByLNCthYxpNMTZgK41l";      // Alarme
 // *VARIÁVEIS GLOBAIS*
 char *_lcdLin1;
 char *_lcdLin2;
-
-bool _portaEmMovimento;
-bool _janelaEmMovimento;
 
 int _passoJanelaAtual; //passo atual da porta
 int _passoPortaAtual; //passo atual da porta
@@ -124,102 +125,64 @@ void setup() {
 #endif
 }
 
-
-
 void loop() {
 #ifndef SEMBLYNK
     Blynk.run();
 #endif
 
-  if (!_portaEmMovimento) {
     cmdAbrirPorta();
     cmdFecharPorta();
-  } else {
     atuaNaPorta();
     verificaSensorPorta();
-  }
 
-  if (!_janelaEmMovimento) {
     cmdAbrirJanela();
     cmdFecharJanela();
-  } else {
     atuaNaJanela();
     verificaSensorJanela();
-  }
 }
-
 
 
 // Inicializa o Ambiente (variáveis)
 void inicializaContexto (void) {
-  _portaEmMovimento = false;
-  _janelaEmMovimento = false;
-
   _lcdLin1 = "";
   _lcdLin2 = "";
 }
 
-
-
 void cmdAbrirPorta(void) {
   if (digitalRead(PIN_CMDABRIRPORTA)) {
     _passoPortaAtual = 30;
-    _portaEmMovimento = true;
   }
 }
-
-
 
 void cmdFecharPorta(void) {
   if (digitalRead(PIN_CMDFECHARPORTA)) {
     _passoPortaAtual = -1;
-    _portaEmMovimento = true;
   }
 }
-
-
 
 void cmdAbrirJanela(void) {
   if (digitalRead(PIN_CMDABRIRJANELA)) {
     _passoJanelaAtual = 30;
-    _janelaEmMovimento = true;
   }
 }
-
-
 
 void cmdFecharJanela(void) {
   if (digitalRead(PIN_CMDFECHARJANELA)) {
     _passoJanelaAtual = -1;
-    _janelaEmMovimento = true;
   }
 }
-
-
 
 // Lê o sensor da janela se ja fechou ou abriu totalmente
 void verificaSensorJanela (void) {
   if (digitalRead(PIN_SENSORJANELA)) { //se detectou que a janela ja fechou ou ja abriu totalmente
-    if (_passoJanelaAtual > 0) { //estava em processo de abrir e ja detectou que abriu totalmente
-      _passoJanelaAtual = 0;
-
-    } else if (_passoJanelaAtual < 0 && _passoJanelaAtual > -30) { // estava em processo de fechar e ja detectou que fechou totalmente
-      _passoJanelaAtual = -30;
-    }
+    _passoJanelaAtual = 0; //para a janela
   }
 }
-
-
 
 // Lê o sensor da porta se ja fechou ou abriu totalmente
 void verificaSensorPorta (void) {
   if (digitalRead(PIN_SENSORPORTA)) { //se detectou que a porta ja fechou ou ja abriu totalmente
-    if (_passoPortaAtual > 0) { //estava em processo de abrir e ja detectou que abriu totalmente
-      _passoPortaAtual = 0;
-
-    } else if (_passoPortaAtual < 0 && _passoPortaAtual > -30) { // estava em processo de fechar e ja detectou que fechou totalmente
-      _passoPortaAtual = -30;
-    }
+    _passoPortaAtual = 0; //para a porta
   }
 }
 
@@ -228,51 +191,36 @@ void atuaNaPorta (void) {
   if (_passoPortaAtual > 0) { //porta abrindo
     motorPorta.step(_passosPorVoltaPorta);
     _passoPortaAtual--;
-
-  } else if (_passoPortaAtual == 0) {
-    _portaEmMovimento = false; //porta permanece aberta
-
-  } else if (_passoPortaAtual <= 0 && _passoPortaAtual > -30) { //porta fechando
+    // quando a variavel _passoPortaAtual chegar em 0, para a porta
+    
+  } else if (_passoPortaAtual < 0 && _passoPortaAtual >= -30) { //porta fechando
     motorPorta.step(-_passosPorVoltaPorta);
     _passoPortaAtual--;
-  } else {
-    _portaEmMovimento = false; // porta permanece fechada
-  }
+  }// quando a variavel _passoPortaAtual chegar em -31, para a porta
 }
-
-
 
 void atuaNaJanela(void) {
 
   if (_passoJanelaAtual > 0) { //janela abrindo
     motorJanela.step(_passosPorVoltaJanela);
     _passoJanelaAtual--;
+    // quando a variavel _passoJanelaAtual chegar em 0, para a janela
 
-  } else if (_passoJanelaAtual == 0) {
-    _janelaEmMovimento = false; //janela permanece aberta
-
-  } else if (_passoJanelaAtual <= 0 && _passoJanelaAtual > -30) { //janela fechando
+  } else if (_passoJanelaAtual < 0 && _passoJanelaAtual >= -30) { //janela fechando
     motorJanela.step(-_passosPorVoltaJanela);
     _passoJanelaAtual--;
-  } else {
-    _janelaEmMovimento = false; // janela permanece fechada
-  }
+  }// quando a variavel _passoJanelaAtual chegar em -31, para a janela
 }
 
-
-
-void printLCD (char texto[]) {
 #ifndef SEMBLYNK
+void printLCD (char texto[]) {
   WidgetLCD lcd(V0);
   _lcdLin1=_lcdLin2;
   _lcdLin2=texto;
   lcd.clear();
   lcd.print(0,0,_lcdLin1);
   lcd.print(0,1,_lcdLin2);
-#endif
 }
-
-
 
 //Redefine o ambiente quando conectado.
 BLYNK_CONNECTED () {
@@ -280,3 +228,4 @@ BLYNK_CONNECTED () {
   printLCD("BH-ALARME OK");
 //  printLCD("");
 }
+#endif
