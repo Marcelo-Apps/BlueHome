@@ -57,7 +57,7 @@ char auth[] = "Xk9Gxg4mK9pfkGEODlVaaqeyZdcNZLXZ";      // Automação
 
 
 #define PIN_SENSORLUZ              36
-#define PIN_TOUCHSENSORCHUVA        2     // T2
+#define PIN_TOUCHSENSORCHUVA       T4     // D13     
 #define PIN_SENSORJANELA           35
 #define PIN_SENSORPORTA            34
 #define PIN_LEDRED                 12
@@ -117,9 +117,7 @@ char auth[] = "Xk9Gxg4mK9pfkGEODlVaaqeyZdcNZLXZ";      // Automação
 
 #define SERIALRF_VELOCIDADE      1500      // Velocidade da Serial de RF (entre Microcontroladores)
 
-
-//#define SIZE_BUFFER     18
-//#define MAX_SIZE_BLOCK  16
+#define TOUCHCHUVA_LIMITEATIVO      1      // Limiar para Indicar acionado (se < que isto)
 
 
 
@@ -134,7 +132,7 @@ bool _novoSensorLuz, _novoLuzExterna, _novoLuzAutomatica, _novoLuzManual, _novoS
 int _atualMorador, _novoLuzR, _novoLuzG, _novoLuzB;
 int _novoMorador, _atualLuzR, _atualLuzG, _atualLuzB;
 
-bool _isRecebendoCorBlynk, _isAbriuJanelaNaChuva;
+bool _isRecebendoCorBlynk;
 int _acaoAlarme, _numErrosRfid;
 
 String _moradorNome;
@@ -170,6 +168,15 @@ void setup() {
   pinMode(PIN_SENSORLUZ, INPUT);
   pinMode(PIN_RELELUZEXTERNA, OUTPUT);
 
+  // Espera 1 segundo
+#ifdef DEBUG
+  Serial.println("MÓDULO BLUEHOME - AUTOMACAO");
+  Serial.println("===========================");
+  Serial.println("");
+  Serial.println("esperando por 1s para aguardar a inicialização do processador de Alarme");
+#endif
+  delay(1000);
+
   // Inicializa os parâmetros e ajustes iniciais
   inicializaContexto();
 
@@ -193,8 +200,12 @@ void setup() {
   // Inicializa o Blynk
   Blynk.begin(auth, ssid, pass);
 #endif
+#ifdef DEBUG
+  Serial.println("esperando por 2s após conectar-se para aguardar o processador de Alarme");
+#endif
   // Espera mais 2 segundos antes de funcionar
   delay(2000);
+
 #ifdef DEBUG
   Serial.println("** OPERAÇÃO DO PROCESSADOR DE AUTOMAÇÃO INICIADA**");
 #endif
@@ -209,6 +220,7 @@ void loop() {
 
   verificaRFID();
   ajustaAmbienteMorador();
+  verificaEstaChovendo();            
   ajustaEstaChovendo();
   verificaCmdPortaAberta();
   verificaCmdJanelaAberta();
@@ -218,9 +230,7 @@ void loop() {
   verificaSensorLuz();
   ajustaSensorLuz();
 
-//  Serial.println("Chuva: "+String(touchRead(PIN_TOUCHSENSORCHUVA)));
-  
-  delay(50);
+  delay(30);
 }
 
 
@@ -249,7 +259,6 @@ void inicializaContexto (void) {
   _atualPortaAberta=false;
   _novoPortaAberta=false;
 
-  _isAbriuJanelaNaChuva=false;
   _isRecebendoCorBlynk=false;
 
   _acaoAlarme=ALARME_SEMACAO;
@@ -363,9 +372,20 @@ void verificaRFID (void) {
 
 
 void verificaEstaChovendo () {
+  int valor=touchRead(PIN_TOUCHSENSORCHUVA);
   
+  bool estado=(valor<TOUCHCHUVA_LIMITEATIVO);
   
+  // Só registra se o "novo" estado já não estava modificado 
+  if (estado!=_novoSensorChuva) {
+    _novoSensorChuva=estado;
+    
+#ifdef DEBUG
+    Serial.println("-- Sensor de Chuva Mudou de Estado. Ficou = "+String(estado)+"  (valor lido no touch="+String(valor)+")");
+#endif
+  }
 }
+
 
 
 void ajustaEstaChovendo () {
@@ -374,15 +394,23 @@ void ajustaEstaChovendo () {
 
     if (_atualSensorChuva) {
       printLCD("Esta Chovendo");
-      if (!_isAbriuJanelaNaChuva) {
+#ifdef DEBUG
+      Serial.println("  -- Começou a Chover");
+#endif
+      // Se janela está fechada, sinaliza abertura, senão apenas mostra no LCD que janela já fechada
+      if (_novoJanelaAberta) {
         _novoJanelaAberta=false;
-        printLCD("Fechando Janela");
+#ifdef DEBUG
+        Serial.println("  -- Sinalizou para Fechar a Janela");
+#endif
       } else {
-        printLCD("JANELA EM MANUAL");
+        printLCD("Jan.Tava Fechada");
       }
     } else {
       printLCD("Parou de Chover");
-      _isAbriuJanelaNaChuva=false;         // Inicializa a seqüência
+#ifdef DEBUG
+    Serial.println("  -- Parou de Chover");
+#endif
     }
   }
 }
@@ -397,8 +425,10 @@ void verificaCmdJanelaAberta () {
     
     if (_atualJanelaAberta) {
       _acaoAlarme=ALARME_ABREJANELA;
+      printLCD("Abriu a Janela");
     } else {
       _acaoAlarme=ALARME_FECHAJANELA;
+      printLCD("Fechou a Janela");
     }
     
     Blynk.virtualWrite(BLYNK_JANELAABERTA,_BoolToEstado(_atualJanelaAberta));
