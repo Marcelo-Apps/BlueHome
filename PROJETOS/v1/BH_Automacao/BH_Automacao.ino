@@ -6,6 +6,9 @@
  * 
  * Autores: Marcelo Costa / Felipe Maia / Faberson Perfeito / Newton Dore
  * 
+ * NOTA: ESTE PROCESSADOR PRECISA INICIALIZAR DEPOIS DO DE ALARME, POIS ELE ENVIA CÓDIGOS
+ *       DE INICIALIZAÇÃO PARA O OUTRO.
+ * 
  * OBS: Ainterface é feita pelo Blynk. Para maiores informações consultar o PDF que acompanha o projeto
  */
 
@@ -54,13 +57,13 @@ char auth[] = "Xk9Gxg4mK9pfkGEODlVaaqeyZdcNZLXZ";      // Automação
 
 
 #define PIN_SENSORLUZ              36
-#define PIN_SENSORCHUVA            T2     // D02
+#define PIN_TOUCHSENSORCHUVA        2     // T2
 #define PIN_SENSORJANELA           35
 #define PIN_SENSORPORTA            34
 #define PIN_LEDRED                 12
 #define PIN_LEDGREEN               14
 #define PIN_LEDBLUE                27
-#define PIN_LUZEXTERNA             4
+#define PIN_RELELUZEXTERNA          4
 
 #define PIN_LEITORCARD_SPI_SCK     18     // Apenas Reserva - SPI trata disto
 #define PIN_LEITORCARD_SPI_MSIO    19     // Apenas Reserva - SPI trata disto
@@ -103,16 +106,16 @@ char auth[] = "Xk9Gxg4mK9pfkGEODlVaaqeyZdcNZLXZ";      // Automação
 #define BLYNK_LUZINT_G             V2
 #define BLYNK_LUZINT_B             V3
 
-#define BLYNK_JANELA              V11
-#define BLYNK_PORTA               V11
+#define BLYNK_JANELAABERTA        V11
+#define BLYNK_PORTAABERTA         V12
 #define BLYNK_LUZEXTERNA          V13
 #define BLYNK_LUZAUTOMATICA       V14                 
-#define BLYNK_IDUSUARIO           V15
-//#define BLYNK_LUZINTERNA         10
+#define BLYNK_IDMORADOR           V10
+
 
 #define RFID_MAXERROS               3      // Máximo de erros do RFID antes de gerar um Alarme 
 
-#define SERIALRF_VELOCIDADE       750      // Velocidade da Serial de RF (entre Microcontroladores)
+#define SERIALRF_VELOCIDADE      1500      // Velocidade da Serial de RF (entre Microcontroladores)
 
 
 //#define SIZE_BUFFER     18
@@ -125,12 +128,13 @@ char auth[] = "Xk9Gxg4mK9pfkGEODlVaaqeyZdcNZLXZ";      // Automação
 String _lcdLin1, _lcdLin2;
 
 
-bool _atualSensorLuz, _atualLuzExt, _atualLuzAutomatica, _atualLuzManual, _atualSensorChuva;
-bool _novoSensorLuz, _novoLuzExt, _novoLuzAutomatica, _novoLuzManual, _novoSensorChuva;
+bool _atualSensorLuz, _atualLuzExterna, _atualLuzAutomatica, _atualLuzManual, _atualSensorChuva, _atualJanelaAberta, _atualPortaAberta;
+bool _novoSensorLuz, _novoLuzExterna, _novoLuzAutomatica, _novoLuzManual, _novoSensorChuva, _novoJanelaAberta, _novoPortaAberta;
 
 int _atualMorador, _novoLuzR, _novoLuzG, _novoLuzB;
 int _novoMorador, _atualLuzR, _atualLuzG, _atualLuzB;
 
+bool _isRecebendoCorBlynk, _isAbriuJanelaNaChuva;
 int _acaoAlarme, _numErrosRfid;
 
 String _moradorNome;
@@ -152,7 +156,6 @@ void setup() {
 #ifdef DEBUG
   Serial.begin(115200);
 #endif
-
   // INICIALIZAÇÃO DO AMBIENTE
   pinMode(PIN_LEDRED, OUTPUT);
   pinMode(PIN_LEDGREEN, OUTPUT);
@@ -165,7 +168,7 @@ void setup() {
   ledcSetup(PWM_LEDBLUE,PWM_FREQUENCIA,PWM_BITSRESOLUCAO);
 
   pinMode(PIN_SENSORLUZ, INPUT);
-  pinMode(PIN_LUZEXTERNA, OUTPUT);
+  pinMode(PIN_RELELUZEXTERNA, OUTPUT);
 
   // Inicializa os parâmetros e ajustes iniciais
   inicializaContexto();
@@ -183,11 +186,17 @@ void setup() {
   Serial.println("Serial entre Automação e Alarme Inicializada (via Sinal de RF)");
   Serial.println("velocidade (bps): "+String(SERIALRF_VELOCIDADE));
 #endif
-
+  // Espera 1 segundo
+  delay(1000);
 
 #ifndef SEMBLYNK
   // Inicializa o Blynk
   Blynk.begin(auth, ssid, pass);
+#endif
+  // Espera mais 2 segundos antes de funcionar
+  delay(2000);
+#ifdef DEBUG
+  Serial.println("** OPERAÇÃO DO PROCESSADOR DE AUTOMAÇÃO INICIADA**");
 #endif
 }
 
@@ -199,13 +208,18 @@ void loop() {
 #endif
 
   verificaRFID();
-  enviaMensagensAlarme();
   ajustaAmbienteMorador();
+  ajustaEstaChovendo();
+  verificaCmdPortaAberta();
+  verificaCmdJanelaAberta();
+  enviaMensagemPendenteAlarme();
   ajustaLuzInterna();
   verificaParamLuzAutomatica();
   verificaSensorLuz();
   ajustaSensorLuz();
 
+//  Serial.println("Chuva: "+String(touchRead(PIN_TOUCHSENSORCHUVA)));
+  
   delay(50);
 }
 
@@ -214,8 +228,8 @@ void loop() {
 void inicializaContexto (void) {
   _atualSensorLuz=false;
   _novoSensorLuz=false;
-  _atualLuzExt=false;
-  _novoLuzExt=false;
+  _atualLuzExterna=false;
+  _novoLuzExterna=false;
   _atualLuzAutomatica=true;
   _novoLuzAutomatica=true;
   _atualLuzManual=false;
@@ -230,6 +244,14 @@ void inicializaContexto (void) {
   _novoLuzR=0;
   _novoLuzG=0;
   _novoLuzB=0;
+  _atualJanelaAberta=false;
+  _novoJanelaAberta=false;
+  _atualPortaAberta=false;
+  _novoPortaAberta=false;
+
+  _isAbriuJanelaNaChuva=false;
+  _isRecebendoCorBlynk=false;
+
   _acaoAlarme=ALARME_SEMACAO;
   _numErrosRfid=0;
   
@@ -238,16 +260,48 @@ void inicializaContexto (void) {
   _lcdLin1="";
   _lcdLin2="";
 
-  digitalWrite(PIN_LUZEXTERNA,HIGH);
+  digitalWrite(PIN_RELELUZEXTERNA,HIGH);
 
   ledcWrite(PWM_LEDRED,PWM_MIN);
   ledcWrite(PWM_LEDGREEN,PWM_MIN);
   ledcWrite(PWM_LEDBLUE,PWM_MIN);
+  
+  _enviaMsgParaAlarme(ALARME_DESATIVA);
+  _enviaMsgParaAlarme(ALARME_FECHAPORTA);
+  _enviaMsgParaAlarme(ALARME_FECHAJANELA);
+  
+  // Coloca o RFID em modo Halt (por garantia)
+   rfid.PICC_HaltA(); 
 }
 
 
 
-// A rotina 
+// Função de Apoio - Envio de Mensagens (usada pelas funções do loop e de inicialização
+//OBS: O prefixo é importante, pois os primeiros caracteres são perdidos (entre 4 e 10)
+void _enviaMsgParaAlarme (int Mensagem) {
+  String texto = ". . . . . . #:"+String(Mensagem)+":# ";
+
+  TxSerial.flush();
+  TxSerial.print(texto);
+#ifdef DEBUG
+   Serial.println("===>Enviada Mensagem para Processador de Alarme via RF: "+texto);
+#endif
+}
+
+
+
+// USO INTERNO: Retorna HIGH ou LOW dependendo do valor passado (função ord não existe aqui)
+int _BoolToEstado (bool valor) {
+  if (valor) {
+    return HIGH;
+  } else {
+    return LOW;
+  }
+}
+
+
+
+
 void verificaRFID (void) {
   
   if ((rfid.PICC_IsNewCardPresent()) && (rfid.PICC_ReadCardSerial())) {
@@ -297,7 +351,7 @@ void verificaRFID (void) {
 #endif
       if (_numErrosRfid==RFID_MAXERROS) {
         _acaoAlarme=ALARME_TOCAR;
-       printLCD("**Alarme Acionado**");
+       printLCD("ALARME ACIONADO");
 #ifdef DEBUG
       Serial.println(" -- *** Excedeu Número de Acessos Inválidos - VAI DISPARAR O ALARME ***");
 #endif
@@ -308,17 +362,81 @@ void verificaRFID (void) {
 
 
 
-void enviaMensagensAlarme () {
-  if (_acaoAlarme!=0) {
-      String texto = "...........#:"+String(_acaoAlarme)+":# ";
+void verificaEstaChovendo () {
+  
+  
+}
 
-      TxSerial.flush();
-      TxSerial.print(texto);
+
+void ajustaEstaChovendo () {
+  if (_atualSensorChuva!=_novoSensorChuva) {
+    _atualSensorChuva=_novoSensorChuva;
+
+    if (_atualSensorChuva) {
+      printLCD("Esta Chovendo");
+      if (!_isAbriuJanelaNaChuva) {
+        _novoJanelaAberta=false;
+        printLCD("Fechando Janela");
+      } else {
+        printLCD("JANELA EM MANUAL");
+      }
+    } else {
+      printLCD("Parou de Chover");
+      _isAbriuJanelaNaChuva=false;         // Inicializa a seqüência
+    }
+  }
+}
+
+
+
+void verificaCmdJanelaAberta () {
+  // Se tiver comandos a executar no alarme só muda status da janela no próximo ciclo
+  if ((_acaoAlarme==0) && (_atualJanelaAberta!=_novoJanelaAberta)) {
+
+    _atualJanelaAberta=_novoJanelaAberta;
+    
+    if (_atualJanelaAberta) {
+      _acaoAlarme=ALARME_ABREJANELA;
+    } else {
+      _acaoAlarme=ALARME_FECHAJANELA;
+    }
+    
+    Blynk.virtualWrite(BLYNK_JANELAABERTA,_BoolToEstado(_atualJanelaAberta));
+    
 #ifdef DEBUG
-      Serial.println("-- Enviada Mensagem para Processador de Alarme via RF: "+texto);
+    Serial.println("-- Solicitou para Mudar Estado de Janela Aberta para "+String(_atualJanelaAberta));
 #endif
-  // Avisa que não tem mais Ações de Alarme
-  _acaoAlarme=0;
+  }
+}
+
+
+
+void verificaCmdPortaAberta () {
+  // Se tiver comandos a executar no alarme só muda status da janela no próximo ciclo
+  if ((_acaoAlarme==0) && (_atualPortaAberta!=_novoPortaAberta)) {
+
+    _atualPortaAberta=_novoPortaAberta;
+    
+    if (_atualPortaAberta) {
+      _acaoAlarme=ALARME_ABREPORTA;
+    } else {
+      _acaoAlarme=ALARME_FECHAPORTA;
+    }
+    
+    Blynk.virtualWrite(BLYNK_PORTAABERTA,_BoolToEstado(_atualPortaAberta));
+    
+#ifdef DEBUG
+    Serial.println("-- Solicitou para Mudar Estado de Porta Aberta para "+String(_atualJanelaAberta));
+#endif
+  }
+}
+
+
+
+void enviaMensagemPendenteAlarme () {
+  if (_acaoAlarme!=0) {
+    _enviaMsgParaAlarme(_acaoAlarme);
+    _acaoAlarme=0;
   }
 }
 
@@ -330,7 +448,9 @@ void ajustaAmbienteMorador () {
 #ifdef DEBUG
     Serial.println("--Mudou de Morador. Era: "+String(_atualMorador)+", e agora é: "+String(_novoMorador));
 #endif
-     _atualMorador=_novoMorador;
+    _atualMorador=_novoMorador;
+    // Informa que NÃO está recebendo cor do Blynk
+    _isRecebendoCorBlynk=false;
     // ** Parâmetros Fixados no Código - Apenas para POC
     if (_atualMorador==1) {
       _novoLuzR=200;
@@ -362,11 +482,14 @@ void ajustaAmbienteMorador () {
 
 
 void ajustaLuzInterna () {
-  if ((_atualLuzR!=_novoLuzR) || (_atualLuzG!=_novoLuzG) || (_atualLuzB!=_novoLuzB)) {
+  // Nota: Não faz a mudança se o Blynk ainda estiver recebendo as novas cores
+  if ((!_isRecebendoCorBlynk)  && ((_atualLuzR!=_novoLuzR) || (_atualLuzG!=_novoLuzG) || (_atualLuzB!=_novoLuzB))) {
     // Ajusta a cor...
     _atualLuzR=_novoLuzR;
     _atualLuzG=_novoLuzG;
     _atualLuzB=_novoLuzB;
+    // Informa que NÃO está recebendo cor do Blynk
+    _isRecebendoCorBlynk=false;
     
     ledcWrite(PWM_LEDRED,_atualLuzR);
     ledcWrite(PWM_LEDGREEN,_atualLuzG);
@@ -418,7 +541,7 @@ void ajustaSensorLuz (void) {
     if (_atualLuzAutomatica) {
       // Executa a ação
       if (_atualSensorLuz) {
-        digitalWrite(PIN_LUZEXTERNA,LOW);
+        digitalWrite(PIN_RELELUZEXTERNA,LOW);
         Blynk.virtualWrite(BLYNK_LUZEXTERNA,LOW);
         printLCD("Luz.Ext. Ligada");
         _atualLuzManual=true;
@@ -427,7 +550,7 @@ void ajustaSensorLuz (void) {
         Serial.println(" -- Ligou a Luz Externa");
 #endif
       } else {
-        digitalWrite(PIN_LUZEXTERNA,HIGH);
+        digitalWrite(PIN_RELELUZEXTERNA,HIGH);
         Blynk.virtualWrite(BLYNK_LUZEXTERNA,HIGH);
         printLCD("Luz.Ext. Deslig.");
         _atualLuzManual=false;
@@ -456,7 +579,7 @@ void ajustaSensorLuz (void) {
 // Atua no comando de Luz Manual (se não estiver no automático)
 void atuaLuzManual (void) {
   if ((_atualLuzManual!=_novoLuzManual)  && (!_atualLuzAutomatica)) {
-        digitalWrite(PIN_LUZEXTERNA,LOW);
+        digitalWrite(PIN_RELELUZEXTERNA,LOW);
     
   }
 }
@@ -476,19 +599,32 @@ void printLCD (String texto) {
 
 
 
-// Redefine o ambiente quando conectado.
+// Redefine o ambiente do Blynk quando conectado (caso caia e entre novamente).
 BLYNK_CONNECTED () {
   // Manda o texto para o LCD
   printLCD("BH-AUTOMACAO OK");
 //  printLCD("");
-}
+  Blynk.virtualWrite(BLYNK_IDMORADOR,_atualMorador);
+  Blynk.virtualWrite(BLYNK_LUZEXTERNA,_BoolToEstado(_atualLuzExterna));
+  Blynk.virtualWrite(BLYNK_LUZAUTOMATICA,_BoolToEstado(_atualLuzExterna));
+  Blynk.virtualWrite(BLYNK_JANELAABERTA,_BoolToEstado(_atualJanelaAberta));
+  Blynk.virtualWrite(BLYNK_PORTAABERTA,_BoolToEstado(_atualPortaAberta));
+  
+  // Nestes três é preciso ser o "_novo", pois o "_atual" tem -1 no início
+  Blynk.virtualWrite(BLYNK_LUZINT_R,_novoLuzR);
+  Blynk.virtualWrite(BLYNK_LUZINT_G,_novoLuzG);
+  Blynk.virtualWrite(BLYNK_LUZINT_B,_novoLuzB);
 
+  printLCD("Ola "+_moradorNome);
+}
 
 
 
 // Mudança da Luz - Vermelha (R)
 BLYNK_WRITE(BLYNK_LUZINT_R) {
   _novoLuzR=param.asInt();
+  // Informa que está recebendo cor (vem R, G e B)
+  _isRecebendoCorBlynk=true;
 #ifdef DEBUG
   Serial.println(" - Cor: Novo R: "+String(_novoLuzR));
 #endif  
@@ -499,6 +635,8 @@ BLYNK_WRITE(BLYNK_LUZINT_R) {
 // Mudança da Luz - Verde (G)
 BLYNK_WRITE(BLYNK_LUZINT_G) {
   _novoLuzG=param.asInt();
+  // Informa que está recebendo cor (vem R, G e B)
+  _isRecebendoCorBlynk=true;
 #ifdef DEBUG
   Serial.println(" - Cor: Novo G: "+String(_novoLuzG));
 #endif  
@@ -509,6 +647,8 @@ BLYNK_WRITE(BLYNK_LUZINT_G) {
 // Mudança da Luz - Azul (B)
 BLYNK_WRITE(BLYNK_LUZINT_B) {
   _novoLuzB=param.asInt();
+  // Informa que JÁ RECEBEU (vem R, G e B)
+  _isRecebendoCorBlynk=false;
 #ifdef DEBUG
   Serial.println(" - Cor: Novo B: "+String(_novoLuzB));
 #endif    
@@ -516,33 +656,46 @@ BLYNK_WRITE(BLYNK_LUZINT_B) {
 
 
 
-/*
-
-// MUDANÇA DE COR DA LUZ INTERNA
-BLYNK_WRITE(BLYNK_LUZINTERNA) {
-  int red, green, blue;
-
-  // Lê parâmetros dos Blynk
-  red=param[0].asInt();
-  green=param[1].asInt();
-  blue=param[2].asInt();
-
+BLYNK_WRITE(BLYNK_PORTAABERTA) {
+  _novoPortaAberta=param.asInt();
 #ifdef DEBUG
-  Serial.print("--LUZ INTERNA - Red: ");
-  Serial.println(red);
-  Serial.print(",  Green: ");
-  Serial.println(green);
-  Serial.print(",  Blue: ");
-  Serial.println(blue);
-#endif
-  
-  ledcWrite(PWM_LEDRED,red);
-  ledcWrite(PWM_LEDGREEN,green);
-  ledcWrite(PWM_LEDBLUE,blue);
+  Serial.println("-->Mudança de Estado da Porta pelo Controlador. Aberta = "+String(_novoPortaAberta));
+#endif    
 }
 
 
-*/
+
+BLYNK_WRITE(BLYNK_JANELAABERTA) {
+  _novoJanelaAberta=param.asInt();
+#ifdef DEBUG
+  Serial.println("-->Mudança de Estado da Janela pelo Controlador. Aberta = "+String(_novoJanelaAberta));
+#endif    
+}
+
+
+
+BLYNK_WRITE(BLYNK_IDMORADOR) {
+  int valor = param.asInt();
+  // Morador = 0 não deveria existir (existe porquê pode não ter ninguém no local
+  if (valor!=0) {
+    _novoMorador=valor;
+#ifdef DEBUG
+    Serial.println("-->Mudança de Morador pelo Controlador. Código = "+String(_novoMorador));
+#endif    
+  }
+  else if (_atualMorador!=0) {
+    // Se tentou passar 0 e já tem um morador, muda para este
+    Blynk.virtualWrite(BLYNK_IDMORADOR,_atualMorador);
+  }
+}
+
+
+
+
+
+
+
+
 // Apenas lê o conteúdo da Luz Automática (a atualização é no novo ciclo)
 BLYNK_WRITE(BLYNK_LUZAUTOMATICA) {
   _novoLuzAutomatica=(param.asInt()!=0);
