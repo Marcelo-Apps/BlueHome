@@ -55,7 +55,7 @@ Revisões
 19 - RFID - SSPI_MISO    (CINZA)
 18 - RFID - SSPI_SCK     (VERDE)
 05 - RFID - LED VERDE     (ROXO)
-17 - SERIAL - RF ENVIO ALAUT-ALA (S2-TX) (O)
+17 - SERIAL - RF ENVIO AUT-ALA (S2-TX) (O)
 16 - SERIAL - *reservado* (S2-RX)
 04 - RELÉ LUZ EXTERNA (O)                                                                                                                                                                                                                          
 02    (ON-BOARD LED)
@@ -67,7 +67,7 @@ RFID - GND  (PRETO)
 
 
 36 (i) - Sensor de Luminosidade (I)
-39 (i) - 
+39 (i) - Sensor de Chuva (Digital) (I)
 34 (i) - Reed-Switch Porta (I)  - Ver se precisa
 35 (i) - Reed-Switch Janela (I)  - Ver se precisa
 32 - 
@@ -77,5 +77,5 @@ RFID - GND  (PRETO)
 27 - RGB-B (O)
 14 - RGB-G (O)
 12 - RGB-R (O)
-13 - (T4) - Sensor de Chuva (I,TOUCH)
+13 - 
 

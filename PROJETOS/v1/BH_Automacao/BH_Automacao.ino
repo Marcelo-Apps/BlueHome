@@ -57,7 +57,7 @@ char auth[] = "Xk9Gxg4mK9pfkGEODlVaaqeyZdcNZLXZ";      // Automação
 
 
 #define PIN_SENSORLUZ              36
-#define PIN_TOUCHSENSORCHUVA       T4     // D13     
+#define PIN_SENSORCHUVA            39     
 #define PIN_SENSORJANELA           35
 #define PIN_SENSORPORTA            34
 #define PIN_LEDRED                 12
@@ -115,7 +115,7 @@ char auth[] = "Xk9Gxg4mK9pfkGEODlVaaqeyZdcNZLXZ";      // Automação
 
 #define RFID_MAXERROS               3      // Máximo de erros do RFID antes de gerar um Alarme 
 
-#define SERIALRF_VELOCIDADE      1500      // Velocidade da Serial de RF (entre Microcontroladores)
+#define SERIALRF_VELOCIDADE       900      // Velocidade da Serial de RF (entre Microcontroladores)
 
 #define TOUCHCHUVA_LIMITEATIVO      1      // Limiar para Indicar acionado (se < que isto)
 
@@ -166,6 +166,7 @@ void setup() {
   ledcSetup(PWM_LEDBLUE,PWM_FREQUENCIA,PWM_BITSRESOLUCAO);
 
   pinMode(PIN_SENSORLUZ, INPUT);
+  pinMode(PIN_SENSORCHUVA, INPUT);
   pinMode(PIN_RELELUZEXTERNA, OUTPUT);
 
   // Espera 1 segundo
@@ -277,7 +278,7 @@ void inicializaContexto (void) {
   
   _enviaMsgParaAlarme(ALARME_DESATIVA);
   _enviaMsgParaAlarme(ALARME_FECHAPORTA);
-  _enviaMsgParaAlarme(ALARME_FECHAJANELA);  
+  _enviaMsgParaAlarme(ALARME_FECHAJANELA);
   
   // Coloca o RFID em modo Halt (por garantia)
    rfid.PICC_HaltA(); 
@@ -373,16 +374,14 @@ void verificaRFID (void) {
 
 
 void verificaEstaChovendo () {
-  int valor=touchRead(PIN_TOUCHSENSORCHUVA);
-  
-  bool estado=(valor<TOUCHCHUVA_LIMITEATIVO);
-  
+  bool lido = (digitalRead(PIN_SENSORCHUVA)==LOW);
+
   // Só registra se o "novo" estado já não estava modificado 
-  if (estado!=_novoSensorChuva) {
-    _novoSensorChuva=estado;
+  if (lido!=_novoSensorChuva) {
+    _novoSensorChuva=lido;
     
 #ifdef DEBUG
-    Serial.println("-- Sensor de Chuva Mudou de Estado. Ficou = "+String(estado)+"  (valor lido no touch="+String(valor)+")");
+    Serial.println("-- Sensor de Chuva Mudou de Estado. Ficou = "+String(_novoSensorChuva)+")");
 #endif
   }
 }
@@ -637,7 +636,7 @@ BLYNK_CONNECTED () {
 //  printLCD("");
   Blynk.virtualWrite(BLYNK_IDMORADOR,_atualMorador);
   Blynk.virtualWrite(BLYNK_LUZEXTERNA,_BoolToEstado(_atualLuzExterna));
-  Blynk.virtualWrite(BLYNK_LUZAUTOMATICA,_BoolToEstado(_atualLuzExterna));
+  Blynk.virtualWrite(BLYNK_LUZAUTOMATICA,_BoolToEstado(_atualLuzAutomatica));
   Blynk.virtualWrite(BLYNK_JANELAABERTA,_BoolToEstado(_atualJanelaAberta));
   Blynk.virtualWrite(BLYNK_PORTAABERTA,_BoolToEstado(_atualPortaAberta));
   
