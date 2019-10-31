@@ -1,13 +1,12 @@
 /*
  * BLUE HOME - V1.0
  * 
- * PROCESSADOR DE AUTOMAÇÃO
+ * PROCESSADOR DE ALARME
  * ESP-32 COM 30 PINOS
  * 
  * Autores: Marcelo Costa / Felipe Maia / Faberson Perfeito / Newton Dore
  * 
- * NOTA: ESTE PROCESSADOR PRECISA INICIALIZAR DEPOIS DO DE ALARME, POIS ELE ENVIA CÓDIGOS
- *       DE INICIALIZAÇÃO PARA O OUTRO.
+ * NOTA: ESTE PROCESSADOR PRECISA INICIALIZAR ANTES DO DE AUTOMAÇÃO, POIS ELE RECEBE CÓDIGOS DO OUTRO.
  * 
  * OBS: Ainterface é feita pelo Blynk. Para maiores informações consultar o PDF que acompanha o projeto
  */
@@ -30,7 +29,8 @@
 #include <WiFiClient.h>
 #include <BlynkSimpleEsp32.h>
 #include <Stepper.h>
-#include <HardwareSerial.h>
+#include <nRF24L01.h>
+#include <RF24.h>
 
 
 // Parâmetros da Wi-Fi
@@ -42,12 +42,11 @@ char pass[] = "BlueHome.IoT.2019";
 //char auth[] = "Xk9Gxg4mK9pfkGEODlVaaqeyZdcNZLXZ";      // Automação
 char auth[] = "UhhrKzVPwBwg-ByLNCthYxpNMTZgK41l";      // Alarme
 
+
 // Pinos usados para outros fins
 // D16 -- U2_RX
 // D17 -- U2_TX
-// D04 - RESERVADO ENQUANTO FAZ COMUNICACAO SERIAL COM PC
 //
-
 
 
 #define PIN_SENSORPIR              36
@@ -64,24 +63,23 @@ char auth[] = "UhhrKzVPwBwg-ByLNCthYxpNMTZgK41l";      // Alarme
 #define PIN_MOTORPORTA_I2          14
 #define PIN_MOTORPORTA_I3          12
 #define PIN_MOTORPORTA_I4          13
-
-// Pinos da comunicação entre Processadores
-#define PIN_SERIAL_COMUNIC_RX      16
-#define PIN_SERIAL_COMUNIC_TX      17
-#define SERIALRF_VELOCIDADE       900      // Velocidade da Serial de RF (entre Microcontroladores)
+#define PIN_BUZZER                 15     // Buzzer na Protoboard
 
 // Mensagens da Automacão para Alarme (RF)
-#define ALARME_SEMACAO              0
-#define ALARME_DESATIVA             1
-#define ALARME_ATIVA                2
-#define ALARME_ATIVASILENCIOSO      3
-#define ALARME_TOCAR                4
-#define ALARME_PARATOCAR            5
-#define ALARME_ABREPORTA            6
-#define ALARME_FECHAPORTA           7
-#define ALARME_ABREJANELA           8
-#define ALARME_FECHAJANELA          9
+#define MSGALARME_SEMACAO           0
+#define MSGALARME_DESATIVA          1
+#define MSGALARME_ATIVA             2
+#define MSGALARME_ATIVAPASSIVO      3
+#define MSGALARME_TOCAR             4
+#define MSGALARME_PARATOCAR         5
+#define MSGALARME_ABREPORTA         6
+#define MSGALARME_FECHAPORTA        7
+#define MSGALARME_ABREJANELA        8
+#define MSGALARME_FECHAJANELA       9
 
+#define ALARME_CONFIGINATIVO        1
+#define ALARME_CONFIGATIVO          2
+#define ALARME_CONFIGPASSIVO        3
 
 // Pinos Virtuais e Definições do Blynk
 #define BLYNK_LCD                  V0
@@ -102,20 +100,37 @@ char auth[] = "UhhrKzVPwBwg-ByLNCthYxpNMTZgK41l";      // Alarme
 #define MOTORPORTA_POSFECHADA      50
 #define MOTORPORTA_POSABERTA        0
 
+#define MOTOR_DIRECAOABRIR         -1
+#define MOTOR_DIRECAOFECHAR         1
+
 #define ALARME_TEMPOESPERA      10000             // Espera 10s para tocar de novo se estiver armado...
+
+#define BEEP_NENHUM                 0
+#define BEEP_BOOT                   1
+#define BEEP_ALARME_INATIVO         2
+#define BEEP_ALARME_ATIVO           3
+#define BEEP_ALARME_PASSIVO         4
+
+#define RADIO_TAMBUFFER            32
+
+
+
+// ** CONSTANTES **
+const byte addrRadio[6] = "23232";      // Endereço de comunicação do rádio
+
+
 
 // ** VARIÁVEIS GLOBAIS **
 
 String _lcdLin1, _lcdLin2;
 
 int _janelaPosicao, _atualJanelaDirecao, _novoJanelaDirecao, _portaPosicao, _atualPortaDirecao, _novoPortaDirecao;
-int _atualAlarmeTipo, _novoAlarmeTipo;
-bool _atualAlarmeTocando, _novoAlarmeTocando;
+int _atualAlarmeConfig, _novoAlarmeConfig;
+bool _atualAlarmeTocando, _novoAlarmeTocando, _sensorPirAtivo;
  
-unsigned long _momentoDesarmouAlarme;
+unsigned long _sireneInativaAte;      //  
 
-// Inicializa a serial para comunicação RF entre Automação e Alarme
-HardwareSerial TxSerial(1);
+
 
 // ** CLASSES **
 
@@ -123,24 +138,23 @@ HardwareSerial TxSerial(1);
 Stepper motorJanela(MOTORJANELA_PASSOSVOLTA, PIN_MOTORJANELA_I1, PIN_MOTORJANELA_I3, PIN_MOTORJANELA_I2, PIN_MOTORJANELA_I4); //INICIALIZA O MOTOR JANELA
 Stepper motorPorta(MOTORPORTA_PASSOSVOLTA, PIN_MOTORPORTA_I1, PIN_MOTORPORTA_I3, PIN_MOTORPORTA_I2, PIN_MOTORPORTA_I4);
 
+// Inicializa o Rádio
+RF24 radio(17,16);
 
 
 
+// Inicialização do Ambiente
 void setup() {
-
   // Se DEBUG, inicializa a serial
 #ifdef DEBUG
   Serial.begin(115200);
 #endif
-
   // INICIALIZAÇÃO DO AMBIENTE
   pinMode(PIN_SENSORPIR, INPUT);
   pinMode(PIN_SENSORJANELA, INPUT);
   pinMode(PIN_SENSORPORTA, INPUT);
-  
   pinMode(PIN_RELEALARME, OUTPUT);
-
-
+  pinMode(PIN_BUZZER, OUTPUT);
 
 #ifdef DEBUG
   Serial.println("MÓDULO BLUEHOME - ALARME");
@@ -151,11 +165,13 @@ void setup() {
   // Inicializa os parâmetros e ajustes iniciais
   inicializaContexto();
   
-  // Inicializa a Serial entre Automação e Alarme
-  TxSerial.begin(SERIALRF_VELOCIDADE,SERIAL_6E2,16,17);   // (BR,Prot,RX,TX);
+  // Inicializa o Rádio, define o canal e configura apenas para Recepção
+  radio.begin();
+  radio.openReadingPipe(0,addrRadio);
+  radio.startListening();
+  
 #ifdef DEBUG
-  Serial.println("Serial entre Automação e Alarme Inicializada (via Sinal de RF)");
-  Serial.println("velocidade (bps): "+String(SERIALRF_VELOCIDADE));
+  Serial.println("Rádio inicializado para recepção");
 #endif  
   // Inicializa os parâmetros e ajustes iniciais
   inicializaContexto();
@@ -165,24 +181,26 @@ void setup() {
   Blynk.begin(auth, ssid, pass);
 #endif
 
+  // Toca o Bipe de Boot
+  beepAsyncPlay(BEEP_BOOT);
+
 
 #ifdef DEBUG
   Serial.println("** OPERAÇÃO DO PROCESSADOR DE ALARME INICIADA**");
 #endif
-
 }
 
 
 
-
-
-
+// Rotina Principal
 void loop() {
 #ifndef SEMBLYNK
     Blynk.run();
 #endif
-
   processaMsgAutomacao();
+  verificaAlarmeConfig();
+  atuaAlarmeConfig();
+  beepAsyncProcessa();
   verificaAlarmeTocando();
   atuaAlarmeTocando();
   verificaJanela();
@@ -195,28 +213,27 @@ void loop() {
 
 
 
-
-
-
-
-
+// Inicializa as variáveis e alguns ajustes (parte do SETUP... Está aqui para ficar mais claro o código)
 void inicializaContexto (void) {
-  // Pinos
+  // Inicializa Portas Necessárias
   digitalWrite(PIN_RELEALARME,HIGH);
 
-  // Variáveis
+    // Inicializa as variáveis do Beep Assíncrono
+  beepAsyncInicializa();
+
+  // Inicializa as Variáveis
   _janelaPosicao=MOTORJANELA_POSFECHADA;
   _atualJanelaDirecao=1;
   _novoJanelaDirecao=1;
   _portaPosicao=MOTORPORTA_POSFECHADA;
   _atualPortaDirecao=1;
   _novoPortaDirecao=1;
-  _momentoDesarmouAlarme=0;
+  _sireneInativaAte=0;
   _atualAlarmeTocando=false;
   _novoAlarmeTocando=false;
-  _novoAlarmeTipo=0;
-  _atualAlarmeTipo=0;
-  
+  _novoAlarmeConfig=ALARME_CONFIGINATIVO;
+  _atualAlarmeConfig=ALARME_CONFIGINATIVO;
+  _sensorPirAtivo=false;  
   _lcdLin1="";
   _lcdLin2="";
   
@@ -230,20 +247,109 @@ void inicializaContexto (void) {
 
 // USO INTERNO: Retorna HIGH ou LOW dependendo do valor passado (função ord não existe aqui)
 int _BoolToEstado (bool valor) {
-  if (valor) return HIGH;
-  else return LOW;
+  if (valor)
+    return HIGH;
+  else
+    return LOW;
 }
 
+
+
+// USO INTERNO: retorna o texto da direção em gerúndo (executando)
+String _getStrDirecao (int direcao) {
+  if (direcao<0)
+    return "Abrindo";
+  else
+    return "Fechando";
+}
+
+
+
+
+// USO INTERNO: retorna o texto da direção após término (executrado)
+String _getStrDirecaoFim (int direcao) {
+  if (direcao<0)
+    return "Aberta";
+  else
+    return "Fechada";
+}
+
+
+
+void VerificaSendorPIR () {
+  if ((!_sensorPirAtivo) && (digitalRead(PIN_SENSORPIR)==HIGH)) {
+    _sensorPirAtivo=true;
+    printLCD("** INVASÃO **");
+#ifdef DEBUG
+    Serial.println("- Sensor PIR Acionado");
+#endif
+  }
+}
 
 
 
 // Processa Mensagens do Processador de Automação
-// Lê 20 caracterers e verifica se tem a Mensagem no formato  #:x:#. Se conseguir ler algo, ajusta os parâmetros
+// Lê 20 caracterers e verifica se tem a Mensagem no formato  #x:#. Se conseguir ler algo, ajusta os parâmetros
 void processaMsgAutomacao () {
-  // Lê 20 caracteres e verfica se tem MSG no formato #:x:#
-  // Se tiver, ajusta o ambiente se possível.
-}
+  if (radio.available())
+  {
+    char bufRec[RADIO_TAMBUFFER]={0};
+    byte comando;
+    
+    radio.read(&bufRec,sizeof(bufRec));
 
+#ifdef DEBUG
+    Serial.println("--> Mensagem da Automação: "+String(bufRec));
+#endif
+
+    if ((bufRec[0]==':') && (bufRec[1]==':') && (bufRec[3]==':') && (bufRec[4]==':')) {
+      comando=byte(bufRec[2])-48;
+
+#ifdef DEBUG
+      Serial.println("  --> Comando: "+String(comando));
+//      printLCD("Cmd_Al-Au->"+String(comando));
+#endif
+      switch (comando) {
+        case MSGALARME_DESATIVA      :  _novoAlarmeConfig=ALARME_CONFIGINATIVO;
+                                        _novoAlarmeTocando=false;
+                                        printLCD("Cmd: Alarm.Des");
+                                        break;
+
+        case MSGALARME_ATIVA         :  _novoAlarmeConfig=ALARME_CONFIGATIVO;
+                                        printLCD("Cmd: Alarm.Atv");
+                                        break;
+
+        case MSGALARME_ATIVAPASSIVO  :  _novoAlarmeConfig=ALARME_CONFIGPASSIVO;
+                                        printLCD("Cmd: Alarm.Pas");
+                                        break;
+                                          
+        case MSGALARME_TOCAR         :  _novoAlarmeTocando=true;
+                                        printLCD("Cmd: Sirene Lig");
+                                        break;
+
+        case MSGALARME_PARATOCAR     :  _novoAlarmeTocando=false;
+                                        printLCD("Cmd: Sirene Des");
+                                        break;
+
+        case MSGALARME_ABREPORTA     :  _novoPortaDirecao=MOTOR_DIRECAOABRIR;
+                                        printLCD("Cmd: Porta Abre");
+                                        break;
+
+        case MSGALARME_FECHAPORTA    :  _novoPortaDirecao=MOTOR_DIRECAOFECHAR;
+                                        printLCD("Cmd: Porta Fecha");
+                                        break;
+
+        case MSGALARME_ABREJANELA    :  _novoJanelaDirecao=MOTOR_DIRECAOABRIR;
+                                        printLCD("Cmd: Janela Abre");
+                                        break;
+
+        case MSGALARME_FECHAJANELA   :  _novoJanelaDirecao=MOTOR_DIRECAOFECHAR;
+                                        printLCD("Cmd: Janela Fech");
+                                        break;
+      }
+    }
+  }
+}
 
 
 /*
@@ -269,7 +375,45 @@ void cmdFecharJanela(void) {
 
 
 
-// Verifica a condição do alarme tocando se ela mudou
+// Verifica a configuração do Alarme
+void verificaAlarmeConfig () {
+  
+//
+}
+
+
+
+
+// Atua na Configuração do Alarme (se necessário)
+void atuaAlarmeConfig () {
+  
+  if (_atualAlarmeConfig!=_novoAlarmeConfig) {
+    _atualAlarmeConfig=_novoAlarmeConfig;
+
+    switch (_atualAlarmeConfig) {
+      case ALARME_CONFIGINATIVO  :  beepAsyncPlay(BEEP_ALARME_INATIVO);
+                                    printLCD("Alarme Desligado");
+                                    _novoAlarmeTocando=false;
+                                    break;
+      case ALARME_CONFIGATIVO    :  beepAsyncPlay(BEEP_ALARME_ATIVO);
+                                    printLCD("Alarme ATIVO");
+                                    break;
+      default :
+        beepAsyncPlay(BEEP_ALARME_PASSIVO);
+        printLCD("Alarme PASSIVO");
+    }
+    
+    Blynk.virtualWrite(BLYNK_ALARMECONFIG,_atualAlarmeConfig);
+#ifdef DEBUG
+    Serial.println("-- Mudou a Configuração do Alarme: "+String(_atualAlarmeConfig));
+#endif
+  }
+}  
+
+
+
+
+// Verifica/Valida a condição do alarme tocando se ela mudou
 void verificaAlarmeTocando () {
 //
 }
@@ -277,25 +421,25 @@ void verificaAlarmeTocando () {
 
 
 
-// Atua no Alarme (se necessário)
+// Atua na Sirente do Alarme (se necessário)
 void atuaAlarmeTocando () {
   if (_atualAlarmeTocando!=_novoAlarmeTocando) {
     _atualAlarmeTocando=_novoAlarmeTocando;
 
     Blynk.virtualWrite(BLYNK_ALARMETOCANDO,_BoolToEstado(_atualAlarmeTocando));
+    digitalWrite(PIN_RELEALARME,!_BoolToEstado(_atualAlarmeTocando));
+
+    if (_atualAlarmeTocando) 
+      printLCD("*SIRENE ATIVA*");
+    else
+      printLCD("*Sirene Inativa*");
+   
 #ifdef DEBUG
-    Serial.println("-- Mudou o Status de Alarme Tocando: "+String(_atualAlarmeTocando));
+    Serial.println("-- Mudou o Status de Sirene Tocando: "+String(_atualAlarmeTocando));
 #endif
-    
-
-
-//
-//
-//
-//
-//
   }
-}  
+}
+
 
 
 
@@ -305,13 +449,13 @@ void verificaJanela () {
     _atualJanelaDirecao=_novoJanelaDirecao;
     
     Blynk.virtualWrite(BLYNK_JANELADIRECAO,_atualJanelaDirecao);
+    printLCD("Janela "+_getStrDirecao(_atualJanelaDirecao));
 #ifdef DEBUG
-    Serial.print("-- Mudou a Direcao da Janela: ");
-    if (_atualJanelaDirecao==1) Serial.println("Fechando");
-    else Serial.println("Abrindo");
+    Serial.println("-- Mudou a Direcao da Janela: "+_getStrDirecao(_atualJanelaDirecao));
 #endif
   }
 }
+
 
 
 
@@ -331,14 +475,13 @@ void verificaPorta () {
     _atualPortaDirecao=_novoPortaDirecao;
     
     Blynk.virtualWrite(BLYNK_PORTADIRECAO,_atualPortaDirecao);
+    printLCD("Porta "+_getStrDirecao(_atualPortaDirecao));
 #ifdef DEBUG
-    Serial.print("-- Mudou a Direcao da Porta: ");
-
-    if (_atualPortaDirecao==1) Serial.println("Fechando");
-    else Serial.println("Abrindo");
+    Serial.println("-- Mudou a Direcao da Porta: "+_getStrDirecao(_atualPortaDirecao));
 #endif
   }
 }
+
 
 
 
@@ -352,6 +495,109 @@ void atuaPorta () {
 
 
 
+
+//---------- FUNÇÕES DO BEEP ASSÍNCRONO ----------//
+// Estas funções permitem criar um toque personalizado que é programado em um Array de Inteiros
+// O toque é assíncrono e utiliza millis() para definir se está na hora de trocar
+// A função beepAsyncProcessa trata dos detalhes da troca de Estado
+
+
+int *__beepAsyncPtr;
+int __beepAsyncCnt, __beepAsyncPos;
+bool __beepAsyncIsTocando;
+unsigned long __beepAsyncTempoLimite;
+
+//---- Arrays de Beeps pré-definidos - Neste aplicativo só Temos estes ----//
+#define BEEPSCNT_BOOT              5
+int __beepAsync_ArrayBoot[BEEPSCNT_BOOT] = {200,20,100,20,200};
+
+#define BEEPSCNT_ALARMEINATIVO     3
+int __beepAsync_ArrayAlarmeInativo[BEEPSCNT_ALARMEINATIVO] = {100,30,200};
+
+#define BEEPSCNT_ALARMEATIVO       5
+int __beepAsync_ArrayAlarmeAtivo[BEEPSCNT_ALARMEATIVO] = {300,50,300,50,500};
+
+#define BEEPSCNT_ALARMEPASSIVO     5
+int __beepAsync_ArrayAlarmePassivo[BEEPSCNT_ALARMEPASSIVO] = {150,50,150,50,200};
+
+
+
+// Toca o Bipe selecionado
+void beepAsyncPlay (int tipoBeep) {
+  switch (tipoBeep) {
+    case BEEP_BOOT   :         __beepAsyncTocaSeq(&__beepAsync_ArrayBoot[0],BEEPSCNT_BOOT);
+                               break;
+
+    case BEEP_ALARME_INATIVO : __beepAsyncTocaSeq(&__beepAsync_ArrayAlarmeInativo[0],BEEPSCNT_ALARMEINATIVO);
+                               break;
+
+    case BEEP_ALARME_ATIVO :   __beepAsyncTocaSeq(&__beepAsync_ArrayAlarmeAtivo[0],BEEPSCNT_ALARMEATIVO);
+                               break;
+
+    case BEEP_ALARME_PASSIVO : __beepAsyncTocaSeq(&__beepAsync_ArrayAlarmePassivo[0],BEEPSCNT_ALARMEPASSIVO);
+                               break;
+
+     default :
+       beepAsyncInicializa();
+  }
+}
+
+
+
+// (CHAMAR NO LOOP) - Processa o Beep se estiver tocando (diferente de -1)
+void beepAsyncProcessa () {
+  if (__beepAsyncPos!=-1) {
+    if (millis()>__beepAsyncTempoLimite) {
+      __beepAsyncMudaEstado();
+    }
+  }
+}
+
+
+
+// Inicializa o estado do Bipe
+void beepAsyncInicializa () {
+  __beepAsyncCnt=0;
+  __beepAsyncPos=-1;
+  __beepAsyncIsTocando=false;
+  digitalWrite(PIN_BUZZER,LOW);
+}
+
+
+
+void __beepAsyncMudaEstado () {
+  if (__beepAsyncPos!=-1) {
+    
+    if (__beepAsyncPos<__beepAsyncCnt) {
+      __beepAsyncIsTocando=!__beepAsyncIsTocando;
+      __beepAsyncTempoLimite=millis()+__beepAsyncPtr[__beepAsyncPos];
+      __beepAsyncPos++;
+    }
+    else {
+      __beepAsyncPos=-1;
+      __beepAsyncIsTocando=false;
+    }
+  
+    if (__beepAsyncIsTocando) {
+      digitalWrite(PIN_BUZZER,HIGH);
+//      Serial.println("Beep Tocando");
+    } else {
+      digitalWrite(PIN_BUZZER,LOW);
+//      Serial.println("Beep Sem Som");
+    }
+  }
+}
+
+
+
+void __beepAsyncTocaSeq (int *ptrBeep, int cntBeep) {
+  __beepAsyncPtr=ptrBeep;
+  __beepAsyncCnt=cntBeep;
+
+  __beepAsyncPos=0;
+  __beepAsyncIsTocando=false;
+  __beepAsyncMudaEstado();
+}
 
 
 //---------- FUNÇÕES DO BLYNK ----------//
@@ -376,12 +622,10 @@ BLYNK_CONNECTED () {
   // Manda o texto para o LCD
   printLCD("BH-ALARME OK");
 //  printLCD("");
-//  Blynk.virtualWrite(BLYNK_IDMORADOR,_atualMorador);
-//  Blynk.virtualWrite(BLYNK_LUZEXTERNA,_BoolToEstado(_atualLuzExterna));
-//  Blynk.virtualWrite(BLYNK_LUZAUTOMATICA,_BoolToEstado(_atualLuzAutomatica));
-//  Blynk.virtualWrite(BLYNK_JANELAABERTA,_BoolToEstado(_atualJanelaAberta));
-//  Blynk.virtualWrite(BLYNK_PORTAABERTA,_BoolToEstado(_atualPortaAberta));
-
+  Blynk.virtualWrite(BLYNK_ALARMETOCANDO,_BoolToEstado(_atualAlarmeTocando));
+  Blynk.virtualWrite(BLYNK_ALARMECONFIG,_atualAlarmeConfig);
+  Blynk.virtualWrite(BLYNK_JANELADIRECAO,_atualJanelaDirecao);
+  Blynk.virtualWrite(BLYNK_PORTADIRECAO,_atualJanelaDirecao);
 }
 
 
@@ -403,4 +647,12 @@ BLYNK_WRITE(BLYNK_PORTADIRECAO) {
 // Armazena o conteúdo do Novo "Alarme Tocando" de acordo com o Blynk
 BLYNK_WRITE(BLYNK_ALARMETOCANDO) {
   _novoAlarmeTocando=(param.asInt()==HIGH);
+}
+
+
+
+
+// Armazena o conteúdo da Nova "Configuração do Alarme" de acordo com o Blynk
+BLYNK_WRITE(BLYNK_ALARMECONFIG) {
+  _novoAlarmeConfig=param.asInt();
 }

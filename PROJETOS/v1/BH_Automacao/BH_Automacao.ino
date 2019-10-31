@@ -25,14 +25,13 @@
   #define BLYNK_PRINT Serial
 #endif
 
-
 #include <WiFi.h>
 #include <WiFiClient.h>
 #include <BlynkSimpleEsp32.h>
 #include <SPI.h>
 #include <MFRC522.h>
-#include <HardwareSerial.h>
-
+#include <nRF24L01.h>
+#include <RF24.h>
 
 
 // Parâmetros da Wi-Fi
@@ -44,16 +43,14 @@ char pass[] = "BlueHome.IoT.2019";
 char auth[] = "Xk9Gxg4mK9pfkGEODlVaaqeyZdcNZLXZ";      // Automação
 //char auth[] = "UhhrKzVPwBwg-ByLNCthYxpNMTZgK41l";      // Alarme
 
+
 // Pinos usados para outros fins
 // D16 -- U2_RX
 // D17 -- U2_TX
 // D18 -- SPI_SCK
 // D19 -- SPI_MSIO
 // D23 -- SPI_MOSI
-// D05 -- Aviso Alarme--Automacao
-// D04 - RESERVADO ENQUANTO FAZ COMUNICACAO SERIAL COM PC
 //
-
 
 
 #define PIN_SENSORLUZ              36
@@ -71,12 +68,7 @@ char auth[] = "Xk9Gxg4mK9pfkGEODlVaaqeyZdcNZLXZ";      // Automação
 #define PIN_LEITORCARD_SDA         21     // RFID
 #define PIN_LEITORCARD_RST         22     // RFID
 
-#define PIN_BEEP                    5     // Buzzer na protoboard do Leitor RFID
-
-// Pinos da comunicação entre Processadores
-#define PIN_SERIAL_COMUNIC_RX      16
-#define PIN_SERIAL_COMUNIC_TX      17
-#define SERIALRF_VELOCIDADE       900      // Velocidade da Serial de RF (entre Microcontroladores)
+#define PIN_BUZZER                  5     // Buzzer na protoboard do Leitor RFID
 
 // Pinos PWM
 #define PWM_LEDRED                 00
@@ -91,17 +83,16 @@ char auth[] = "Xk9Gxg4mK9pfkGEODlVaaqeyZdcNZLXZ";      // Automação
 #define PWM_MAX                   255
 
 // Mensagens da Automacão para Alarme (RF)
-#define ALARME_SEMACAO              0
-#define ALARME_DESATIVA             1
-#define ALARME_ATIVA                2
-#define ALARME_ATIVASILENCIOSO      3 
-#define ALARME_TOCAR                4
-#define ALARME_PARATOCAR            5
-#define ALARME_ABREPORTA            6
-#define ALARME_FECHAPORTA           7
-#define ALARME_ABREJANELA           8
-#define ALARME_FECHAJANELA          9
- 
+#define MSGALARME_SEMACAO           0
+#define MSGALARME_DESATIVA          1
+#define MSGALARME_ATIVA             2
+#define MSGALARME_ATIVASILENCIOSO   3
+#define MSGALARME_TOCAR             4
+#define MSGALARME_PARATOCAR         5
+#define MSGALARME_ABREPORTA         6
+#define MSGALARME_FECHAPORTA        7
+#define MSGALARME_ABREJANELA        8
+#define MSGALARME_FECHAJANELA       9
 
 // Pinos Virtuais e Definições do Blynk
 #define BLYNK_LCD                  V0
@@ -115,14 +106,23 @@ char auth[] = "Xk9Gxg4mK9pfkGEODlVaaqeyZdcNZLXZ";      // Automação
 #define BLYNK_LUZAUTOMATICA       V14                 
 #define BLYNK_IDMORADOR           V10
 
-
 #define RFID_MAXERROS               3      // Máximo de erros do RFID antes de gerar um Alarme 
+
+#define BEEP_NENHUM                 0
+#define BEEP_BOOT                   1
+#define BEEP_RFID_OK                2
+#define BEEP_RFID_ERRO              3
+
+
+
+// ** CONSTANTES **
+const byte addrRadio[6] = "23232";      // Endereço de comunicação do rádio
+
 
 
 // ** VARIÁVEIS GLOBAIS **
 
 String _lcdLin1, _lcdLin2;
-
 
 bool _atualSensorLuz, _atualLuzExterna, _atualLuzAutomatica, _atualLuzManual, _atualSensorChuva, _atualJanelaAberta, _atualPortaAberta;
 bool _novoSensorLuz, _novoLuzExterna, _novoLuzAutomatica, _novoLuzManual, _novoSensorChuva, _novoJanelaAberta, _novoPortaAberta;
@@ -137,19 +137,20 @@ String _moradorNome;
 
 
 
-
 // ** CLASSES **
 
 // Inicializa o RFID
 MFRC522 rfid(PIN_LEITORCARD_SDA,PIN_LEITORCARD_RST);
 
-// Inicializa a serial para comunicação RF entre Automação e Alarme
-HardwareSerial TxSerial(1);
+// Inicializa o Rádio
+RF24 radio(17,16);
 
 
 
-// Inicialização dos parâmetos
+
+// Inicialização do Ambiente
 void setup() {
+  // Se DEBUG, inicializa a serial
 #ifdef DEBUG
   Serial.begin(115200);
 #endif
@@ -167,7 +168,7 @@ void setup() {
   pinMode(PIN_SENSORLUZ, INPUT);
   pinMode(PIN_SENSORCHUVA, INPUT);
   pinMode(PIN_RELELUZEXTERNA, OUTPUT);
-  pinMode(PIN_BEEP,OUTPUT);
+  pinMode(PIN_BUZZER,OUTPUT);
 
   // Espera 1 segundo
 #ifdef DEBUG
@@ -188,12 +189,15 @@ void setup() {
   Serial.println("Código do Leitor RFID inicializado.");
 #endif
 
-  // Inicializa a Serial entre Automação e Alarme
-  TxSerial.begin(SERIALRF_VELOCIDADE,SERIAL_6E2,16,17);   // (BR,Prot,RX,TX);
+  // Inicializa o Rádio, define o canal e configura apenas para Transmissão
+  radio.begin();
+  radio.openWritingPipe(addrRadio);
+  radio.stopListening();
+  
 #ifdef DEBUG
-  Serial.println("Serial entre Automação e Alarme Inicializada (via Sinal de RF)");
-  Serial.println("velocidade (bps): "+String(SERIALRF_VELOCIDADE));
+  Serial.println("Rádio inicializado para transmissão");
 #endif
+
   // Espera 1 segundo
   delay(1000);
 
@@ -201,16 +205,25 @@ void setup() {
   // Inicializa o Blynk
   Blynk.begin(auth, ssid, pass);
 #endif
+
 #ifdef DEBUG
-  Serial.println("esperando por 2s após conectar-se para aguardar o processador de Alarme");
+  Serial.println("esperando por 1,5s após conectar-se para aguardar o processador de Alarme");
 #endif
   // Espera mais 2 segundos antes de funcionar
-  delay(2000);
+  delay(1500);
 
+  // Envia os parâmetros iniciai
+  enviaDefinicoesIniciaisParaAlarme();
+
+  // Toca o Bipe de Boot
+  beepAsyncPlay(BEEP_BOOT);
+  
 #ifdef DEBUG
   Serial.println("** OPERAÇÃO DO PROCESSADOR DE AUTOMAÇÃO INICIADA**");
 #endif
 }
+
+
 
 
 // Rotina Principal
@@ -220,7 +233,7 @@ void loop() {
 #endif
 
   verificaRFID();
-  beepAssyncProcessa();
+  beepAsyncProcessa();
   ajustaAmbienteMorador();
   verificaEstaChovendo();            
   ajustaEstaChovendo();
@@ -236,11 +249,18 @@ void loop() {
 
 
 
+// Inicializa as variáveis e alguns ajustes (parte do SETUP... Está aqui para ficar mais claro o código)
 void inicializaContexto (void) {
-  // Pinos
+  // Inicializa Portas Necessárias
   digitalWrite(PIN_RELELUZEXTERNA,HIGH);
+  ledcWrite(PWM_LEDRED,PWM_MIN);
+  ledcWrite(PWM_LEDGREEN,PWM_MIN);
+  ledcWrite(PWM_LEDBLUE,PWM_MIN);
+
+  // Inicializa as variáveis do Beep Assíncrono
+  beepAsyncInicializa();
   
-  // Variáveis
+  // Inicializa as Variáveis
   _atualSensorLuz=false;
   _novoSensorLuz=false;
   _atualLuzExterna=false;
@@ -266,7 +286,7 @@ void inicializaContexto (void) {
 
   _isRecebendoCorBlynk=false;
 
-  _acaoAlarme=ALARME_SEMACAO;
+  _acaoAlarme=MSGALARME_SEMACAO;
   _numErrosRfid=0;
   
   _moradorNome="";
@@ -274,19 +294,21 @@ void inicializaContexto (void) {
   _lcdLin1="";
   _lcdLin2="";
 
-  ledcWrite(PWM_LEDRED,PWM_MIN);
-  ledcWrite(PWM_LEDGREEN,PWM_MIN);
-  ledcWrite(PWM_LEDBLUE,PWM_MIN);
-  
-  _enviaMsgParaAlarme(ALARME_DESATIVA);
-  _enviaMsgParaAlarme(ALARME_FECHAPORTA);
-  _enviaMsgParaAlarme(ALARME_FECHAJANELA);
-  
   // Coloca o RFID em modo Halt (por garantia)
   rfid.PICC_HaltA(); 
-  
-  // Inicializa as variáveis do Beep Assíncrono
-  beepAssyncInicializa();
+}
+
+
+
+
+// Envia as definições de Status iniciais para o Processador de Alarme 
+void enviaDefinicoesIniciaisParaAlarme () {
+  _enviaMsgParaAlarme(MSGALARME_DESATIVA);
+  delay(100);
+  _enviaMsgParaAlarme(MSGALARME_FECHAPORTA);
+  delay(100);
+  _enviaMsgParaAlarme(MSGALARME_FECHAJANELA);
+  delay(100);
 }
 
 
@@ -294,24 +316,23 @@ void inicializaContexto (void) {
 // Função de Apoio - Envio de Mensagens (usada pelas funções do loop e de inicialização
 //OBS: O prefixo é importante, pois os primeiros caracteres são perdidos (entre 4 e 10)
 void _enviaMsgParaAlarme (int Mensagem) {
-  String texto = ". . . . . . #:"+String(Mensagem)+":# ";
-
-  TxSerial.flush();
-  TxSerial.print(texto);
+  String txtEnvio = "::"+String(Mensagem)+"::";
+  
+  radio.write(&txtEnvio[0],txtEnvio.length());
 #ifdef DEBUG
-   Serial.println("===>Enviada Mensagem para Processador de Alarme via RF: "+texto);
+   Serial.println("===>Enviada Mensagem para Processador de Alarme via RF: "+txtEnvio);
 #endif
 }
 
 
 
+
 // USO INTERNO: Retorna HIGH ou LOW dependendo do valor passado (função ord não existe aqui)
 int _BoolToEstado (bool valor) {
-  if (valor) {
+  if (valor)
     return HIGH;
-  } else {
+  else
     return LOW;
-  }
 }
 
 
@@ -351,8 +372,12 @@ void verificaRFID (void) {
 
     if (_novoMorador!=0) {
       _numErrosRfid=0;
-      _acaoAlarme=ALARME_DESATIVA;
-      beepAssyncPlay(true);
+      // Desativa o alarme...
+      _enviaMsgParaAlarme(MSGALARME_DESATIVA);
+      // Aguarda 10ms
+      delay(10);
+      _acaoAlarme=MSGALARME_ABREPORTA;
+      beepAsyncPlay(BEEP_RFID_OK);
 //      printLCD("OK: "+chave);
 #ifdef DEBUG
       Serial.print(" -- RFID Autorizado: Usuário: ");
@@ -362,13 +387,13 @@ void verificaRFID (void) {
       _numErrosRfid++;
       printLCD("ERR: "+chave);
       printLCD("Tag Invalido ("+String(_numErrosRfid)+")");
-      beepAssyncPlay(false);
+      beepAsyncPlay(BEEP_RFID_ERRO);
 #ifdef DEBUG
       Serial.print(" -- RFID *INVÁLIDO* -- TENTATIVAS COM ERRO: ");
       Serial.println(_numErrosRfid);
 #endif
       if (_numErrosRfid==RFID_MAXERROS) {
-        _acaoAlarme=ALARME_TOCAR;
+        _acaoAlarme=MSGALARME_TOCAR;
        printLCD("ALARME ACIONADO");
 #ifdef DEBUG
       Serial.println(" -- *** Excedeu Número de Acessos Inválidos - VAI DISPARAR O ALARME ***");
@@ -434,10 +459,10 @@ void verificaCmdJanelaAberta () {
     _atualJanelaAberta=_novoJanelaAberta;
     
     if (_atualJanelaAberta) {
-      _acaoAlarme=ALARME_ABREJANELA;
+      _acaoAlarme=MSGALARME_ABREJANELA;
       printLCD("Abriu a Janela");
     } else {
-      _acaoAlarme=ALARME_FECHAJANELA;
+      _acaoAlarme=MSGALARME_FECHAJANELA;
       printLCD("Fechou a Janela");
     }
     
@@ -459,9 +484,9 @@ void verificaCmdPortaAberta () {
     _atualPortaAberta=_novoPortaAberta;
     
     if (_atualPortaAberta) {
-      _acaoAlarme=ALARME_ABREPORTA;
+      _acaoAlarme=MSGALARME_ABREPORTA;
     } else {
-      _acaoAlarme=ALARME_FECHAPORTA;
+      _acaoAlarme=MSGALARME_FECHAPORTA;
     }
     
     Blynk.virtualWrite(BLYNK_PORTAABERTA,_BoolToEstado(_atualPortaAberta));
@@ -638,73 +663,85 @@ void atuaLuzManual (void) {
 //---------- FUNÇÕES DO BEEP ASSÍNCRONO ----------//
 // Estas funções permitem criar um toque personalizado que é programado em um Array de Inteiros
 // O toque é assíncrono e utiliza millis() para definir se está na hora de trocar
-// A função beepAssyncProcessa trata dos detalhes da troca de Estado
+// A função beepAsyncProcessa trata dos detalhes da troca de Estado
 
 
-int *__beepAssyncPtr;
-int __beepAssyncCnt, __beepAssyncPos;
-bool __beepAssyncIsTocando;
-unsigned long __beepAssyncTempoLimite;
+int *__beepAsyncPtr;
+int __beepAsyncCnt, __beepAsyncPos;
+bool __beepAsyncIsTocando;
+unsigned long __beepAsyncTempoLimite;
 
 //---- Arrays de Beeps pré-definidos - Neste aplicativo só Temos estes ----//
-#define BEEPSCNT_OK       1
-int __beepAssync_ArrayOK[BEEPSCNT_OK] = {100};
+#define BEEPSCNT_BOOT               3
+int __beepAsync_ArrayBoot[BEEPSCNT_BOOT] = {400,20,100};
 
-#define BEEPSCNT_ERR      5
-int __beepAssync_ArrayERR[BEEPSCNT_ERR] = {80,50,80,50,120};
+#define BEEPSCNT_OK                 1
+int __beepAsync_ArrayOK[BEEPSCNT_OK] = {100};
+
+#define BEEPSCNT_ERR                5
+int __beepAsync_ArrayERR[BEEPSCNT_ERR] = {80,50,80,50,120};
 
 
 
 
-void beepAssyncPlay (bool isOk) {
-  if (isOk) {
-    __beepAssyncTocaSeq(&__beepAssync_ArrayOK[0],BEEPSCNT_OK);
-  } else {
-    __beepAssyncTocaSeq(&__beepAssync_ArrayERR[0],BEEPSCNT_ERR);
+// Toca o Bipe selecionado
+void beepAsyncPlay (int tipoBeep) {
+  switch (tipoBeep) {
+    case BEEP_BOOT   :    __beepAsyncTocaSeq(&__beepAsync_ArrayBoot[0],BEEPSCNT_BOOT);
+                          break;
+
+    case BEEP_RFID_OK :   __beepAsyncTocaSeq(&__beepAsync_ArrayOK[0],BEEPSCNT_OK);
+                            break;
+
+    case BEEP_RFID_ERRO : __beepAsyncTocaSeq(&__beepAsync_ArrayERR[0],BEEPSCNT_ERR);
+                            break;
+     default :
+       beepAsyncInicializa();
   }
 }
 
 
 
-// Processa o Beep se estiver tocando (diferente de -1)
-void beepAssyncProcessa () {
-  if (__beepAssyncPos!=-1) {
-    if (millis()>__beepAssyncTempoLimite) {
-      __beepAssyncMudaEstado();
+
+// (CHAMAR NO LOOP) - Processa o Beep se estiver tocando (diferente de -1)
+void beepAsyncProcessa () {
+  if (__beepAsyncPos!=-1) {
+    if (millis()>__beepAsyncTempoLimite) {
+      __beepAsyncMudaEstado();
     }
   }
 }
 
 
 
-void beepAssyncInicializa () {
-  __beepAssyncCnt=0;
-  __beepAssyncPos=-1;
-  __beepAssyncIsTocando=false;
-  pinMode(PIN_BEEP,OUTPUT);
-  digitalWrite(PIN_BEEP,LOW);
+// Inicializa o estado do Bipe
+void beepAsyncInicializa () {
+  __beepAsyncCnt=0;
+  __beepAsyncPos=-1;
+  __beepAsyncIsTocando=false;
+  digitalWrite(PIN_BUZZER,LOW);
 }
 
 
 
-void __beepAssyncMudaEstado () {
-  if (__beepAssyncPos!=-1) {
+void __beepAsyncMudaEstado () {
+  if (__beepAsyncPos!=-1) {
     
-    if (__beepAssyncPos<__beepAssyncCnt) {
-      __beepAssyncIsTocando=!__beepAssyncIsTocando;
-      __beepAssyncTempoLimite=millis()+__beepAssyncPtr[__beepAssyncPos];
-      __beepAssyncPos++;
+    if (__beepAsyncPos<__beepAsyncCnt) {
+      __beepAsyncIsTocando=!__beepAsyncIsTocando;
+      __beepAsyncTempoLimite=millis()+__beepAsyncPtr[__beepAsyncPos];
+      __beepAsyncPos++;
     }
     else {
-      __beepAssyncPos=-1;
-      __beepAssyncIsTocando=false;
+      __beepAsyncPos=-1;
+      __beepAsyncIsTocando=false;
     }
   
-    if (__beepAssyncIsTocando) {
-      digitalWrite(PIN_BEEP,HIGH);
+    if (__beepAsyncIsTocando) {
+      digitalWrite(PIN_BUZZER,HIGH);
 //      Serial.println("Beep Tocando");
     } else {
-      digitalWrite(PIN_BEEP,LOW);
+      digitalWrite(PIN_BUZZER,LOW);
 //      Serial.println("Beep Sem Som");
     }
   }
@@ -712,13 +749,13 @@ void __beepAssyncMudaEstado () {
 
 
 
-void __beepAssyncTocaSeq (int *ptrBeep, int cntBeep) {
-  __beepAssyncPtr=ptrBeep;
-  __beepAssyncCnt=cntBeep;
+void __beepAsyncTocaSeq (int *ptrBeep, int cntBeep) {
+  __beepAsyncPtr=ptrBeep;
+  __beepAsyncCnt=cntBeep;
 
-  __beepAssyncPos=0;
-  __beepAssyncIsTocando=false;
-  __beepAssyncMudaEstado();
+  __beepAsyncPos=0;
+  __beepAsyncIsTocando=false;
+  __beepAsyncMudaEstado();
 }
 
 
