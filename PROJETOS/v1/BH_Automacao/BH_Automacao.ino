@@ -71,9 +71,12 @@ char auth[] = "Xk9Gxg4mK9pfkGEODlVaaqeyZdcNZLXZ";      // Automação
 #define PIN_LEITORCARD_SDA         21     // RFID
 #define PIN_LEITORCARD_RST         22     // RFID
 
+#define PIN_BEEP                    5     // Buzzer na protoboard do Leitor RFID
+
 // Pinos da comunicação entre Processadores
 #define PIN_SERIAL_COMUNIC_RX      16
 #define PIN_SERIAL_COMUNIC_TX      17
+#define SERIALRF_VELOCIDADE       900      // Velocidade da Serial de RF (entre Microcontroladores)
 
 // Pinos PWM
 #define PWM_LEDRED                 00
@@ -115,11 +118,6 @@ char auth[] = "Xk9Gxg4mK9pfkGEODlVaaqeyZdcNZLXZ";      // Automação
 
 #define RFID_MAXERROS               3      // Máximo de erros do RFID antes de gerar um Alarme 
 
-#define SERIALRF_VELOCIDADE       900      // Velocidade da Serial de RF (entre Microcontroladores)
-
-#define TOUCHCHUVA_LIMITEATIVO      1      // Limiar para Indicar acionado (se < que isto)
-
-
 
 // ** VARIÁVEIS GLOBAIS **
 
@@ -150,6 +148,7 @@ HardwareSerial TxSerial(1);
 
 
 
+// Inicialização dos parâmetos
 void setup() {
 #ifdef DEBUG
   Serial.begin(115200);
@@ -168,6 +167,7 @@ void setup() {
   pinMode(PIN_SENSORLUZ, INPUT);
   pinMode(PIN_SENSORCHUVA, INPUT);
   pinMode(PIN_RELELUZEXTERNA, OUTPUT);
+  pinMode(PIN_BEEP,OUTPUT);
 
   // Espera 1 segundo
 #ifdef DEBUG
@@ -213,13 +213,14 @@ void setup() {
 }
 
 
-
+// Rotina Principal
 void loop() {
 #ifndef SEMBLYNK
     Blynk.run();
 #endif
 
   verificaRFID();
+  beepAssyncProcessa();
   ajustaAmbienteMorador();
   verificaEstaChovendo();            
   ajustaEstaChovendo();
@@ -230,13 +231,16 @@ void loop() {
   verificaParamLuzAutomatica();
   verificaSensorLuz();
   ajustaSensorLuz();
-
-  delay(30);
+  delay(5);
 }
 
 
 
 void inicializaContexto (void) {
+  // Pinos
+  digitalWrite(PIN_RELELUZEXTERNA,HIGH);
+  
+  // Variáveis
   _atualSensorLuz=false;
   _novoSensorLuz=false;
   _atualLuzExterna=false;
@@ -270,8 +274,6 @@ void inicializaContexto (void) {
   _lcdLin1="";
   _lcdLin2="";
 
-  digitalWrite(PIN_RELELUZEXTERNA,HIGH);
-
   ledcWrite(PWM_LEDRED,PWM_MIN);
   ledcWrite(PWM_LEDGREEN,PWM_MIN);
   ledcWrite(PWM_LEDBLUE,PWM_MIN);
@@ -281,7 +283,10 @@ void inicializaContexto (void) {
   _enviaMsgParaAlarme(ALARME_FECHAJANELA);
   
   // Coloca o RFID em modo Halt (por garantia)
-   rfid.PICC_HaltA(); 
+  rfid.PICC_HaltA(); 
+  
+  // Inicializa as variáveis do Beep Assíncrono
+  beepAssyncInicializa();
 }
 
 
@@ -347,6 +352,7 @@ void verificaRFID (void) {
     if (_novoMorador!=0) {
       _numErrosRfid=0;
       _acaoAlarme=ALARME_DESATIVA;
+      beepAssyncPlay(true);
 //      printLCD("OK: "+chave);
 #ifdef DEBUG
       Serial.print(" -- RFID Autorizado: Usuário: ");
@@ -354,8 +360,9 @@ void verificaRFID (void) {
 #endif
     } else {
       _numErrosRfid++;
-       printLCD("ERR: "+chave);
-       printLCD("Tag Invalido ("+String(_numErrosRfid)+")");
+      printLCD("ERR: "+chave);
+      printLCD("Tag Invalido ("+String(_numErrosRfid)+")");
+      beepAssyncPlay(false);
 #ifdef DEBUG
       Serial.print(" -- RFID *INVÁLIDO* -- TENTATIVAS COM ERRO: ");
       Serial.println(_numErrosRfid);
@@ -373,6 +380,7 @@ void verificaRFID (void) {
 
 
 
+
 void verificaEstaChovendo () {
   bool lido = (digitalRead(PIN_SENSORCHUVA)==LOW);
 
@@ -385,6 +393,7 @@ void verificaEstaChovendo () {
 #endif
   }
 }
+
 
 
 
@@ -417,6 +426,7 @@ void ajustaEstaChovendo () {
 
 
 
+
 void verificaCmdJanelaAberta () {
   // Se tiver comandos a executar no alarme só muda status da janela no próximo ciclo
   if ((_acaoAlarme==0) && (_atualJanelaAberta!=_novoJanelaAberta)) {
@@ -438,6 +448,7 @@ void verificaCmdJanelaAberta () {
 #endif
   }
 }
+
 
 
 
@@ -463,12 +474,14 @@ void verificaCmdPortaAberta () {
 
 
 
+
 void enviaMensagemPendenteAlarme () {
   if (_acaoAlarme!=0) {
     _enviaMsgParaAlarme(_acaoAlarme);
     _acaoAlarme=0;
   }
 }
+
 
 
 
@@ -511,6 +524,8 @@ void ajustaAmbienteMorador () {
 }
 
 
+
+
 void ajustaLuzInterna () {
   // Nota: Não faz a mudança se o Blynk ainda estiver recebendo as novas cores
   if ((!_isRecebendoCorBlynk)  && ((_atualLuzR!=_novoLuzR) || (_atualLuzG!=_novoLuzG) || (_atualLuzB!=_novoLuzB))) {
@@ -536,6 +551,7 @@ void ajustaLuzInterna () {
 
 
 
+
 void verificaParamLuzAutomatica (void) {
   if (_atualLuzAutomatica!=_novoLuzAutomatica) {
 #ifdef DEBUG
@@ -547,12 +563,14 @@ void verificaParamLuzAutomatica (void) {
 
 
 
+
 // Lê o sensor de Luz SE JÁ não estiver modificado
 void verificaSensorLuz (void) {
   if (_atualSensorLuz==_novoSensorLuz) {
     _novoSensorLuz=(digitalRead(PIN_SENSORLUZ)==HIGH);
   }
 }
+
 
 
 
@@ -613,6 +631,100 @@ void atuaLuzManual (void) {
     
   }
 }
+
+
+
+
+//---------- FUNÇÕES DO BEEP ASSÍNCRONO ----------//
+// Estas funções permitem criar um toque personalizado que é programado em um Array de Inteiros
+// O toque é assíncrono e utiliza millis() para definir se está na hora de trocar
+// A função beepAssyncProcessa trata dos detalhes da troca de Estado
+
+
+int *__beepAssyncPtr;
+int __beepAssyncCnt, __beepAssyncPos;
+bool __beepAssyncIsTocando;
+unsigned long __beepAssyncTempoLimite;
+
+//---- Arrays de Beeps pré-definidos - Neste aplicativo só Temos estes ----//
+#define BEEPSCNT_OK       1
+int __beepAssync_ArrayOK[BEEPSCNT_OK] = {100};
+
+#define BEEPSCNT_ERR      5
+int __beepAssync_ArrayERR[BEEPSCNT_ERR] = {80,50,80,50,120};
+
+
+
+
+void beepAssyncPlay (bool isOk) {
+  if (isOk) {
+    __beepAssyncTocaSeq(&__beepAssync_ArrayOK[0],BEEPSCNT_OK);
+  } else {
+    __beepAssyncTocaSeq(&__beepAssync_ArrayERR[0],BEEPSCNT_ERR);
+  }
+}
+
+
+
+// Processa o Beep se estiver tocando (diferente de -1)
+void beepAssyncProcessa () {
+  if (__beepAssyncPos!=-1) {
+    if (millis()>__beepAssyncTempoLimite) {
+      __beepAssyncMudaEstado();
+    }
+  }
+}
+
+
+
+void beepAssyncInicializa () {
+  __beepAssyncCnt=0;
+  __beepAssyncPos=-1;
+  __beepAssyncIsTocando=false;
+  pinMode(PIN_BEEP,OUTPUT);
+  digitalWrite(PIN_BEEP,LOW);
+}
+
+
+
+void __beepAssyncMudaEstado () {
+  if (__beepAssyncPos!=-1) {
+    
+    if (__beepAssyncPos<__beepAssyncCnt) {
+      __beepAssyncIsTocando=!__beepAssyncIsTocando;
+      __beepAssyncTempoLimite=millis()+__beepAssyncPtr[__beepAssyncPos];
+      __beepAssyncPos++;
+    }
+    else {
+      __beepAssyncPos=-1;
+      __beepAssyncIsTocando=false;
+    }
+  
+    if (__beepAssyncIsTocando) {
+      digitalWrite(PIN_BEEP,HIGH);
+//      Serial.println("Beep Tocando");
+    } else {
+      digitalWrite(PIN_BEEP,LOW);
+//      Serial.println("Beep Sem Som");
+    }
+  }
+}
+
+
+
+void __beepAssyncTocaSeq (int *ptrBeep, int cntBeep) {
+  __beepAssyncPtr=ptrBeep;
+  __beepAssyncCnt=cntBeep;
+
+  __beepAssyncPos=0;
+  __beepAssyncIsTocando=false;
+  __beepAssyncMudaEstado();
+}
+
+
+
+
+//---------- FUNÇÕES DO BLYNK ----------//
 
 
 void printLCD (String texto) {

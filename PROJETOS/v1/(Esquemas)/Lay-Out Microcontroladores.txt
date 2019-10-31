@@ -54,7 +54,7 @@ Revisões
 21 - RFID - SSPI_SDA     (LARANJA)
 19 - RFID - SSPI_MISO    (CINZA)
 18 - RFID - SSPI_SCK     (VERDE)
-05 - RFID - LED VERDE     (ROXO)
+05 - RFID - BEEP         (ROXO)
 17 - SERIAL - RF ENVIO AUT-ALA (S2-TX) (O)
 16 - SERIAL - *reservado* (S2-RX)
 04 - RELÉ LUZ EXTERNA (O)                                                                                                                                                                                                                          
