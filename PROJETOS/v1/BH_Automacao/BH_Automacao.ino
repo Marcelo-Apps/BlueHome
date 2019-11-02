@@ -20,6 +20,8 @@
 // Se é depuração (gera conteudo na serial para análise)
 #define DEBUG
 
+#define MOSTRADEBUGLCD
+
 
 #ifdef DEBUG  
   #define BLYNK_PRINT Serial
@@ -313,8 +315,7 @@ void enviaDefinicoesIniciaisParaAlarme () {
 
 
 
-// Função de Apoio - Envio de Mensagens (usada pelas funções do loop e de inicialização
-//OBS: O prefixo é importante, pois os primeiros caracteres são perdidos (entre 4 e 10)
+// Função de Apoio - Envio de Mensagens (usada pelas funções do loop e de inicialização)
 void _enviaMsgParaAlarme (int Mensagem) {
   String txtEnvio = "::"+String(Mensagem)+"::";
   
@@ -345,7 +346,7 @@ void verificaRFID (void) {
     String chave = "";
 
 #ifdef DEBUG
-    Serial.print("-- ***TAG RFID Inserida - Código: ");
+
 #endif
 
     for (byte ind=0;ind<rfid.uid.size;ind++) {
@@ -355,7 +356,7 @@ void verificaRFID (void) {
       chave.concat(String(num,HEX));
     }
 #ifdef DEBUG
-    Serial.println("("+chave+")");
+    Serial.print("-- ***TAG RFID Inserida - Código: ("+chave+")");
 #endif
     
     rfid.PICC_HaltA();
@@ -414,7 +415,7 @@ void verificaEstaChovendo () {
     _novoSensorChuva=lido;
     
 #ifdef DEBUG
-    Serial.println("-- Sensor de Chuva Mudou de Estado. Ficou = "+String(_novoSensorChuva)+")");
+    Serial.println("-- Sensor de Chuva Mudou de Estado. Ficou = "+String(_novoSensorChuva));
 #endif
   }
 }
