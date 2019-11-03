@@ -30,9 +30,9 @@
 #include <WiFi.h>
 #include <WiFiClient.h>
 #include <BlynkSimpleEsp32.h>
-#include <Stepper.h>
 #include <nRF24L01.h>
 #include <RF24.h>
+#include <AccelStepper.h>
 
 
 // Parâmetros da Wi-Fi
@@ -61,10 +61,11 @@ char auth[] = "UhhrKzVPwBwg-ByLNCthYxpNMTZgK41l";      // Alarme
 #define PIN_MOTORJANELA_I3         12
 #define PIN_MOTORJANELA_I4         13
 
-#define PIN_MOTORPORTA_I1          27
-#define PIN_MOTORPORTA_I2          14
-#define PIN_MOTORPORTA_I3          12
-#define PIN_MOTORPORTA_I4          13
+#define PIN_MOTORPORTA_I1          32
+#define PIN_MOTORPORTA_I2          33
+#define PIN_MOTORPORTA_I3          25
+#define PIN_MOTORPORTA_I4          26
+
 #define PIN_BUZZER                 15     // Buzzer na Protoboard
 
 // Mensagens da Automacão para Alarme (RF)
@@ -90,16 +91,16 @@ char auth[] = "UhhrKzVPwBwg-ByLNCthYxpNMTZgK41l";      // Alarme
 #define BLYNK_JANELADIRECAO       V11
 #define BLYNK_PORTADIRECAO        V12
 
-#define MOTORJANELA_VELOCIDADE    400
-#define MOTORJANELA_PASSOSVOLTA   200
-#define MOTORJANELA_PASSOSVEZ      10
-#define MOTORJANELA_POSFECHADA     50
+#define MOTORJANELA_RPM           200
+#define MOTORJANELA_PASSOSVOLTA    20
+#define MOTORJANELA_PASSOSVEZ      20
+#define MOTORJANELA_POSFECHADA    100
 #define MOTORJANELA_POSABERTA       0
 
-#define MOTORPORTA_VELOCIDADE     400
-#define MOTORPORTA_PASSOSVOLTA    200
-#define MOTORPORTA_PASSOSVEZ       10
-#define MOTORPORTA_POSFECHADA      50.
+#define MOTORPORTA_RPM            200
+#define MOTORPORTA_PASSOSVOLTA     20 
+#define MOTORPORTA_PASSOSVEZ       30
+#define MOTORPORTA_POSFECHADA     200
 #define MOTORPORTA_POSABERTA        0
 
 #define MOTOR_DIRECAOABRIR         -1
@@ -129,6 +130,7 @@ String _lcdLin1, _lcdLin2;
 int _janelaPosicao, _atualJanelaDirecao, _novoJanelaDirecao, _portaPosicao, _atualPortaDirecao, _novoPortaDirecao;
 int _atualAlarmeConfig, _novoAlarmeConfig;
 bool _atualSireneTocando, _novoSireneTocando, _atualSensorPir, _novoSensorPir;
+bool _isPortaFechada, _isJanelaFechada;
  
 unsigned long _sireneInativaPorSensorAte;      // A sirene não pode ser acionada antes deste tempo por conta de Sensor
 
@@ -137,8 +139,8 @@ unsigned long _sireneInativaPorSensorAte;      // A sirene não pode ser acionad
 // ** CLASSES **
 
 // Inicializa os Motores de Passo
-Stepper motorJanela(MOTORJANELA_PASSOSVOLTA, PIN_MOTORJANELA_I1, PIN_MOTORJANELA_I3, PIN_MOTORJANELA_I2, PIN_MOTORJANELA_I4); //INICIALIZA O MOTOR JANELA
-Stepper motorPorta(MOTORPORTA_PASSOSVOLTA, PIN_MOTORPORTA_I1, PIN_MOTORPORTA_I3, PIN_MOTORPORTA_I2, PIN_MOTORPORTA_I4);
+AccelStepper motorJanela(AccelStepper::FULL4WIRE, PIN_MOTORJANELA_I1, PIN_MOTORJANELA_I2, PIN_MOTORJANELA_I3, PIN_MOTORJANELA_I4);
+AccelStepper motorPorta(AccelStepper::FULL4WIRE, PIN_MOTORPORTA_I1, PIN_MOTORPORTA_I2, PIN_MOTORPORTA_I3, PIN_MOTORPORTA_I4);
 
 // Inicializa o Rádio
 RF24 radio(17,16);
@@ -199,6 +201,8 @@ void loop() {
 #ifndef SEMBLYNK
     Blynk.run();
 #endif
+
+  verificaStatusSensoresPortaJanela ();
   processaMsgAutomacao();
   
   verificaAlarmeConfig();
@@ -243,13 +247,17 @@ void inicializaContexto (void) {
   _atualAlarmeConfig=ALARME_CONFIGINATIVO;
   _atualSensorPir=false;
   _novoSensorPir=false;
+  _isPortaFechada=false;
+  _isJanelaFechada=false;
   _sireneInativaPorSensorAte=0;
   _lcdLin1="";
   _lcdLin2="";
   
   // Ajusta a velocidade dos Motores
-  motorJanela.setSpeed(MOTORJANELA_VELOCIDADE);
-  motorPorta.setSpeed(MOTORPORTA_VELOCIDADE);
+  motorJanela.setMaxSpeed(200.0);
+  motorJanela.setAcceleration(100.0);
+  motorPorta.setMaxSpeed(200.0);
+  motorPorta.setAcceleration(100.0);
 }
 
 
@@ -283,6 +291,31 @@ String _getStrDirecaoFim (int direcao) {
     return "Aberta";
   else
     return "Fechada";
+}
+
+
+
+
+void verificaStatusSensoresPortaJanela () {
+  bool lidoPortaFechada = (digitalRead(PIN_SENSORPORTA)==LOW);
+  bool lidoJanelaFechada = (digitalRead(PIN_SENSORJANELA)==LOW);
+
+
+  if (_isPortaFechada!=lidoPortaFechada) {
+    _isPortaFechada=lidoPortaFechada;
+
+#ifdef DEBUG
+    Serial.println("- Porta Fechada Mudou de Status para "+String(_isPortaFechada));
+#endif
+  }
+  
+  if (_isJanelaFechada!=lidoJanelaFechada) {
+    _isJanelaFechada=lidoJanelaFechada;
+  
+#ifdef DEBUG
+    Serial.println("- Janela Fechada Mudou de Status para "+String(_isJanelaFechada));
+#endif
+  }
 }
 
 
@@ -500,9 +533,13 @@ void verificaJanela () {
 void atuaJanela () {
   if (((_atualJanelaDirecao>0) && (_janelaPosicao<MOTORJANELA_POSFECHADA)) || ((_atualJanelaDirecao<0) && (_janelaPosicao>MOTORJANELA_POSABERTA))) {
     _janelaPosicao+=_atualJanelaDirecao;
-    motorJanela.step(MOTORJANELA_PASSOSVEZ*_atualJanelaDirecao);    
+   
+//    motorJanela.step(MOTORJANELA_PASSOSVEZ*_atualJanelaDirecao);
+      motorPorta.moveTo(200);
+      motorPorta.run();
   }
 }
+
 
 
 
@@ -525,8 +562,15 @@ void verificaPorta () {
 // Atua na Porta de acordo com a direção, posição e status do reed
 void atuaPorta () {
   if (((_atualPortaDirecao>0) && (_portaPosicao<MOTORPORTA_POSFECHADA)) || ((_atualPortaDirecao<0) && (_portaPosicao>MOTORPORTA_POSABERTA))) {
+
+    if (_portaPosicao==0)
     _portaPosicao+=_atualPortaDirecao;
-    motorPorta.step(MOTORJANELA_PASSOSVEZ*_atualPortaDirecao);        
+//    motorPorta.step(MOTORPORTA_PASSOSVEZ*_atualPortaDirecao);
+//    if (_portaPosicaomotorPorta.runToNewPosition(_portaPosicao);
+      motorPorta.moveTo(0);
+      motorPorta.run();
+//    motorPorta.onestep(FORWARD, SINGLE);
+//    Serial.println(_portaPosicao);
   }
 }
 

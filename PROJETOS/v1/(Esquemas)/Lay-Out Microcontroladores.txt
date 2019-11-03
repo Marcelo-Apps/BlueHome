@@ -9,27 +9,26 @@ Revisões
 
 --> Lay-Out ESP32 Alarme
 *PINOS ÚTEIS*
-- Precisa estabelecer comunicação serial
 
-23 - MP_i4 (O)
+23 - nRF24L01 - SPI_MOSI     (MARROM)
 22 - 
-01 - 
-03 - 
+01 - TX0
+03 - RX0
 21 - 
-19 - MP-i3 (O)
-18 - MP_i2(O)
+19 - nRF24L01 - SSPI_MISO    (CINZA)
+18 - nRF24L01 - SSPI_SCK     (VERDE)
 05 - 
-17 - SERIAL - *reservado* (S2-TX)
-16 - SERIAL - RF RECEBIMENTO AUT-ALA (S2-RX)
+17 - nRF24L01 - CE           (LARANJA)
+16 - nRF24L01 - CSN          (BRANCO)
 04 - RELÉ ALARME (O)                                                                                                                                                                                                                           
 02 - MO_i1 (O)   (ON-BOARD LED)
-15 - BUZZER (BIPE)
+15 - BUZZER (BIPE) (O)
 
 
 36 (i) - Sensor PIR (I)
 39 (i) - 
-34 (i) - Reed-Switch Porta (I)
-35 (i) - Reed-Switch Janela (I)
+34 (i) - Reed-Switch Porta (I)   {pull-up}
+35 (i) - Reed-Switch Janela (I)  {pull-up}
 32 - MP_i1 (O)
 33 - MP_i2 (O)
 25 - MP_i3 (O)
@@ -47,18 +46,18 @@ Revisões
 - Precisa incluir RFID
 - Precisa estabelecer comunicação serial
 
-23 - RFID - SPI_MOSI     (MARROM)
-22 - RFID - SSPI_RST     (BRANCO)
-01 - 
-03 - RFID - ****LIVRE*** (VEFRMELHO)   BOTÃO FECHA A PORTA ??
-21 - RFID - SSPI_SDA     (LARANJA)
-19 - RFID - SSPI_MISO    (CINZA)
-18 - RFID - SSPI_SCK     (VERDE)
-05 - RFID - BUZZER       (ROXO)
-17 - SERIAL - RF ENVIO AUT-ALA (S2-TX) (O)
-16 - SERIAL - *reservado* (S2-RX)
+23 - RFID+nRF24L01 - SPI_MOSI    (MARROM)
+22 - RFID - SSPI_RST             (BRANCO)
+01 - TX0
+03 - RX0
+21 - RFID - SSPI_SDA             (LARANJA)
+19 - RFID+nRF24L01 - SSPI_MISO   (CINZA)
+18 - RFID+nRF24L01 - SSPI_SCK    (VERDE)
+05 - RFID - BUZZER (O)           (ROXO)
+17 - nRF24L01 - CE               (LARANJA)
+16 - nRF24L01 - CSN              (BRANCO)
 04 - RELÉ LUZ EXTERNA (O)                                                                                                                                                                                                                          
-02    (ON-BOARD LED)
+02   PLACA RFID - BOTAO (I)      (VEFRMELHO)(ON-BOARD LED)
 15
 
 
@@ -68,8 +67,8 @@ RFID - GND  (PRETO)
 
 36 (i) - Sensor de Luminosidade (I)
 39 (i) - Sensor de Chuva (Digital) (I)
-34 (i) - Reed-Switch Porta (I)  - Ver se precisa
-35 (i) - Reed-Switch Janela (I)  - Ver se precisa
+34 (i) - Reed-Switch Porta (I)   {pull-up}
+35 (i) - Reed-Switch Janela (I)  {pull-up}
 32 - 
 33 - 
 25 - 

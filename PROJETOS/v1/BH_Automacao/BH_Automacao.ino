@@ -71,6 +71,7 @@ char auth[] = "Xk9Gxg4mK9pfkGEODlVaaqeyZdcNZLXZ";      // Automação
 #define PIN_LEITORCARD_RST         22     // RFID
 
 #define PIN_BUZZER                  5     // Buzzer na protoboard do Leitor RFID
+#define PIN_BOTAOFECHARPORTA        2     // Botão na Protoboard do leitor RFID
 
 // Pinos PWM
 #define PWM_LEDRED                 00
@@ -102,8 +103,6 @@ char auth[] = "Xk9Gxg4mK9pfkGEODlVaaqeyZdcNZLXZ";      // Automação
 #define BLYNK_LUZINT_G             V2
 #define BLYNK_LUZINT_B             V3
 
-#define BLYNK_JANELAABERTA        V11
-#define BLYNK_PORTAABERTA         V12
 #define BLYNK_LUZEXTERNA          V13
 #define BLYNK_LUZAUTOMATICA       V14                 
 #define BLYNK_IDMORADOR           V10
@@ -126,8 +125,10 @@ const byte addrRadio[6] = "23232";      // Endereço de comunicação do rádio
 
 String _lcdLin1, _lcdLin2;
 
-bool _atualSensorLuz, _atualLuzExterna, _atualLuzAutomatica, _atualLuzManual, _atualSensorChuva, _atualJanelaAberta, _atualPortaAberta;
-bool _novoSensorLuz, _novoLuzExterna, _novoLuzAutomatica, _novoLuzManual, _novoSensorChuva, _novoJanelaAberta, _novoPortaAberta;
+bool _atualSensorLuz, _atualLuzExterna, _atualLuzAutomatica, _atualSensorChuva, _atualBotaoFechaPorta;
+bool _novoSensorLuz, _novoLuzExterna, _novoLuzAutomatica, _novoSensorChuva, _novoBotaoFechaPorta;
+
+bool _isPortaFechada, _isJanelaFechada, _isBotaoFechaPortaApertado;
 
 int _atualMorador, _novoLuzR, _novoLuzG, _novoLuzB;
 int _novoMorador, _atualLuzR, _atualLuzG, _atualLuzB;
@@ -157,9 +158,9 @@ void setup() {
   Serial.begin(115200);
 #endif
   // INICIALIZAÇÃO DO AMBIENTE
-  pinMode(PIN_LEDRED, OUTPUT);
-  pinMode(PIN_LEDGREEN, OUTPUT);
-  pinMode(PIN_LEDBLUE, OUTPUT);
+  pinMode(PIN_LEDRED,OUTPUT);
+  pinMode(PIN_LEDGREEN,OUTPUT);
+  pinMode(PIN_LEDBLUE,OUTPUT);
   ledcAttachPin(PIN_LEDRED,PWM_LEDRED);
   ledcAttachPin(PIN_LEDGREEN,PWM_LEDGREEN);
   ledcAttachPin(PIN_LEDBLUE,PWM_LEDBLUE);
@@ -167,10 +168,15 @@ void setup() {
   ledcSetup(PWM_LEDGREEN,PWM_FREQUENCIA,PWM_BITSRESOLUCAO);
   ledcSetup(PWM_LEDBLUE,PWM_FREQUENCIA,PWM_BITSRESOLUCAO);
 
-  pinMode(PIN_SENSORLUZ, INPUT);
-  pinMode(PIN_SENSORCHUVA, INPUT);
-  pinMode(PIN_RELELUZEXTERNA, OUTPUT);
+  pinMode(PIN_SENSORLUZ,INPUT);
+  pinMode(PIN_SENSORCHUVA,INPUT);
+  pinMode(PIN_RELELUZEXTERNA,OUTPUT);
   pinMode(PIN_BUZZER,OUTPUT);
+  pinMode(PIN_SENSORJANELA,INPUT);
+  pinMode(PIN_SENSORPORTA,INPUT);
+  pinMode(PIN_BOTAOFECHARPORTA,INPUT);
+  
+
 
   // Espera 1 segundo
 #ifdef DEBUG
@@ -236,16 +242,19 @@ void loop() {
 
   verificaRFID();
   beepAsyncProcessa();
+  
   ajustaAmbienteMorador();
   verificaEstaChovendo();            
   ajustaEstaChovendo();
-  verificaCmdPortaAberta();
-  verificaCmdJanelaAberta();
+  verificaStatusSensoresPortaJanela();
+  verificaAtuaBotaFechaPorta();
   enviaMensagemPendenteAlarme();
   ajustaLuzInterna();
   verificaParamLuzAutomatica();
   verificaSensorLuz();
   ajustaSensorLuz();
+  verificaBotaoLuzExterna();
+  ajustaLuzExternaManual();
   delay(5);
 }
 
@@ -269,8 +278,6 @@ void inicializaContexto (void) {
   _novoLuzExterna=false;
   _atualLuzAutomatica=true;
   _novoLuzAutomatica=true;
-  _atualLuzManual=false;
-  _novoLuzManual=false;
   _atualSensorChuva=false;
   _novoSensorChuva=false;
   _atualMorador=0;
@@ -281,11 +288,10 @@ void inicializaContexto (void) {
   _novoLuzR=0;
   _novoLuzG=0;
   _novoLuzB=0;
-  _atualJanelaAberta=false;
-  _novoJanelaAberta=false;
-  _atualPortaAberta=false;
-  _novoPortaAberta=false;
-
+  _isPortaFechada=false;
+  _isJanelaFechada=false;
+  _isBotaoFechaPortaApertado=false;
+  
   _isRecebendoCorBlynk=false;
 
   _acaoAlarme=MSGALARME_SEMACAO;
@@ -312,6 +318,7 @@ void enviaDefinicoesIniciaisParaAlarme () {
   _enviaMsgParaAlarme(MSGALARME_FECHAJANELA);
   delay(100);
 }
+
 
 
 
@@ -356,7 +363,7 @@ void verificaRFID (void) {
       chave.concat(String(num,HEX));
     }
 #ifdef DEBUG
-    Serial.print("-- ***TAG RFID Inserida - Código: ("+chave+")");
+    Serial.println("-- ***TAG RFID Inserida - Código: ("+chave+")");
 #endif
     
     rfid.PICC_HaltA();
@@ -407,6 +414,64 @@ void verificaRFID (void) {
 
 
 
+void verificaStatusSensoresPortaJanela () {
+  bool lidoPortaFechada = (digitalRead(PIN_SENSORPORTA)==LOW);
+  bool lidoJanelaFechada = (digitalRead(PIN_SENSORJANELA)==LOW);
+
+
+  if (_isPortaFechada!=lidoPortaFechada) {
+    _isPortaFechada=lidoPortaFechada;
+
+#ifdef DEBUG
+    Serial.println("- Porta Fechada Mudou de Status para "+String(_isPortaFechada));
+#endif
+  }
+  
+  if (_isJanelaFechada!=lidoJanelaFechada) {
+    _isJanelaFechada=lidoJanelaFechada;
+  
+#ifdef DEBUG
+    Serial.println("- Janela Fechada Mudou de Status para "+String(_isJanelaFechada));
+#endif
+  }
+}
+
+
+
+
+// Verifica se o Botão de Fechar a Porta (na Protoboard do RFID) está apertado
+// OBS: Como ele gera uma Ação para o Alarme, só executa se não tiver Ações Pendentes
+void verificaAtuaBotaFechaPorta () {
+  if (_acaoAlarme==0) {
+    bool lidoBotaoFechaPortaApertado = (digitalRead(PIN_BOTAOFECHARPORTA)==HIGH);
+  
+    if (lidoBotaoFechaPortaApertado!=_isBotaoFechaPortaApertado)
+    {
+      _isBotaoFechaPortaApertado=lidoBotaoFechaPortaApertado;
+  
+  #ifdef DEBUG
+      Serial.println("- Botão de Fechar a Porta mudou de Estado. . Ficou = "+String(_isBotaoFechaPortaApertado));
+  #endif
+      
+      if (_isBotaoFechaPortaApertado) {
+        if (_isPortaFechada) {
+          printLCD("Porta já Fechada"); 
+        }
+        else {
+          _acaoAlarme=MSGALARME_FECHAPORTA;
+          printLCD("Fechou a Porta");
+#ifdef DEBUG
+        Serial.println("  -- Sinalizou para Fechar a Porta");
+#endif
+        }
+      }
+    }
+  }
+}
+
+
+
+
 void verificaEstaChovendo () {
   bool lido = (digitalRead(PIN_SENSORCHUVA)==LOW);
 
@@ -422,30 +487,33 @@ void verificaEstaChovendo () {
 
 
 
-
+// OBS: Só pode ajustar o sensor de chuva se não tiver mensagem de alarme pendente para processamento
 void ajustaEstaChovendo () {
-  if (_atualSensorChuva!=_novoSensorChuva) {
-    _atualSensorChuva=_novoSensorChuva;
-
-    if (_atualSensorChuva) {
-      printLCD("Esta Chovendo");
-#ifdef DEBUG
-      Serial.println("  -- Começou a Chover");
-#endif
-      // Se janela está fechada, sinaliza abertura, senão apenas mostra no LCD que janela já fechada
-      if (_novoJanelaAberta) {
-        _novoJanelaAberta=false;
-#ifdef DEBUG
-        Serial.println("  -- Sinalizou para Fechar a Janela");
-#endif
+  if (_acaoAlarme==0) {
+    if (_atualSensorChuva!=_novoSensorChuva) {
+      _atualSensorChuva=_novoSensorChuva;
+  
+      if (_atualSensorChuva) {
+        printLCD("Esta Chovendo");
+  #ifdef DEBUG
+        Serial.println("  -- Começou a Chover");
+  #endif
+        // Se janela está aberta, sinaliza abertura, senão apenas mostra no LCD que janela já fechada
+        if (!_isJanelaFechada) {
+          _acaoAlarme=MSGALARME_FECHAJANELA;
+          printLCD("Fechando Janela");
+  #ifdef DEBUG
+          Serial.println("  -- Sinalizou para Fechar a Janela");
+  #endif
+        } else {
+          printLCD("Jan.Tava Fechada");
+        }
       } else {
-        printLCD("Jan.Tava Fechada");
+        printLCD("Parou de Chover");
+  #ifdef DEBUG
+      Serial.println("  -- Parou de Chover");
+  #endif
       }
-    } else {
-      printLCD("Parou de Chover");
-#ifdef DEBUG
-    Serial.println("  -- Parou de Chover");
-#endif
     }
   }
 }
@@ -453,54 +521,7 @@ void ajustaEstaChovendo () {
 
 
 
-void verificaCmdJanelaAberta () {
-  // Se tiver comandos a executar no alarme só muda status da janela no próximo ciclo
-  if ((_acaoAlarme==0) && (_atualJanelaAberta!=_novoJanelaAberta)) {
-
-    _atualJanelaAberta=_novoJanelaAberta;
-    
-    if (_atualJanelaAberta) {
-      _acaoAlarme=MSGALARME_ABREJANELA;
-      printLCD("Abriu a Janela");
-    } else {
-      _acaoAlarme=MSGALARME_FECHAJANELA;
-      printLCD("Fechou a Janela");
-    }
-    
-    Blynk.virtualWrite(BLYNK_JANELAABERTA,_BoolToEstado(_atualJanelaAberta));
-    
-#ifdef DEBUG
-    Serial.println("-- Solicitou para Mudar Estado de Janela Aberta para "+String(_atualJanelaAberta));
-#endif
-  }
-}
-
-
-
-
-void verificaCmdPortaAberta () {
-  // Se tiver comandos a executar no alarme só muda status da janela no próximo ciclo
-  if ((_acaoAlarme==0) && (_atualPortaAberta!=_novoPortaAberta)) {
-
-    _atualPortaAberta=_novoPortaAberta;
-    
-    if (_atualPortaAberta) {
-      _acaoAlarme=MSGALARME_ABREPORTA;
-    } else {
-      _acaoAlarme=MSGALARME_FECHAPORTA;
-    }
-    
-    Blynk.virtualWrite(BLYNK_PORTAABERTA,_BoolToEstado(_atualPortaAberta));
-    
-#ifdef DEBUG
-    Serial.println("-- Solicitou para Mudar Estado de Porta Aberta para "+String(_atualJanelaAberta));
-#endif
-  }
-}
-
-
-
-
+// Envia Mensagem Pendente (se tiver) para o Processador de Alarme
 void enviaMensagemPendenteAlarme () {
   if (_acaoAlarme!=0) {
     _enviaMsgParaAlarme(_acaoAlarme);
@@ -545,6 +566,8 @@ void ajustaAmbienteMorador () {
 
     if (_moradorNome!="") {
     printLCD("Ola "+_moradorNome);
+    // Atualiza o Morador no Blynk
+    Blynk.virtualWrite(BLYNK_IDMORADOR,_atualMorador);
     }
   }
 }
@@ -578,8 +601,22 @@ void ajustaLuzInterna () {
 
 
 
+// Lê o estado do sensor de Luz
+void verificaSensorLuz (void) {
+  _novoSensorLuz=(digitalRead(PIN_SENSORLUZ)==HIGH);
+}
+
+
+
+
 void verificaParamLuzAutomatica (void) {
   if (_atualLuzAutomatica!=_novoLuzAutomatica) {
+    _atualLuzAutomatica=_novoLuzAutomatica;
+
+    if (_atualLuzAutomatica) {
+      // Esta atgribuição força a execução do "ajustaSensorLuz"
+      _atualSensorLuz=!_novoSensorLuz;
+    }
 #ifdef DEBUG
      Serial.println("-- Mudou o Estado do Parâmetro Luz Automática");
      Serial.println(" -- NOVO estado: "+String(_novoLuzAutomatica));
@@ -590,71 +627,82 @@ void verificaParamLuzAutomatica (void) {
 
 
 
-// Lê o sensor de Luz SE JÁ não estiver modificado
-void verificaSensorLuz (void) {
-  if (_atualSensorLuz==_novoSensorLuz) {
-    _novoSensorLuz=(digitalRead(PIN_SENSORLUZ)==HIGH);
-  }
-}
-
-
-
-
-// Atua no sensor de Luz SE Precisar
+// Atua na luz externa se o Sensor de Luz modificou e está em luz automática
 void ajustaSensorLuz (void) {
-  if ((_atualSensorLuz!=_novoSensorLuz)  || (_atualLuzAutomatica!=_novoLuzAutomatica)) {
+  if (_atualSensorLuz!=_novoSensorLuz) {
 
-    // Faz a atribuição de Atual=Novo
     _atualSensorLuz=_novoSensorLuz;
-    _atualLuzAutomatica=_novoLuzAutomatica;
-
+    
+    // Mostra na tela que escureceu ou Clareou
+    if (_atualSensorLuz)
+      printLCD("Céu Escureceu");
+    else
+      printLCD("Céu Clareou");
+      
 #ifdef DEBUG
-      Serial.println("-- Mudou o Estado do Sensor de Luz");
+    Serial.println("-- Mudou o Estado do Sensor de Luz para = "+String(_atualSensorLuz));
 #endif
 
+    // Executa a ação de Luz Automática estiver ativa
     if (_atualLuzAutomatica) {
-      // Executa a ação
       if (_atualSensorLuz) {
         digitalWrite(PIN_RELELUZEXTERNA,LOW);
-        Blynk.virtualWrite(BLYNK_LUZEXTERNA,LOW);
+        Blynk.virtualWrite(BLYNK_LUZEXTERNA,HIGH);
         printLCD("Luz.Ext. Ligada");
-        _atualLuzManual=true;
-        _novoLuzManual=true;
-#ifdef DEBUG
-        Serial.println(" -- Ligou a Luz Externa");
-#endif
+        _atualLuzExterna=true;
+        _novoLuzExterna=true;
+  #ifdef DEBUG
+        Serial.println(" -- Ligou a Luz Externa Automaticamente");
+  #endif
       } else {
         digitalWrite(PIN_RELELUZEXTERNA,HIGH);
-        Blynk.virtualWrite(BLYNK_LUZEXTERNA,HIGH);
+        Blynk.virtualWrite(BLYNK_LUZEXTERNA,LOW);
         printLCD("Luz.Ext. Deslig.");
-        _atualLuzManual=false;
-        _novoLuzManual=false;
-#ifdef DEBUG
-        Serial.println(" -- Desligou a Luz Externa");
-#endif
+        _atualLuzExterna=false;
+        _novoLuzExterna=false;
+  #ifdef DEBUG
+        Serial.println(" -- Desligou a Luz Externa Automaticamente");
+  #endif
       }
-    } else {
-#ifdef DEBUG
-      Serial.println(" -- *NÃO FEZ NADA -- LUZ AUTOMÁTICA ESTÁ DESLIGADA*");
-#endif
     }
   }
 }
 
 
-//INCOMPLETO
-//INCOMPLETO
-//INCOMPLETO
-//INCOMPLETO
-//INCOMPLETO
-//INCOMPLETO
-//INCOMPLETO
-//INCOMPLETO
-// Atua no comando de Luz Manual (se não estiver no automático)
-void atuaLuzManual (void) {
-  if ((_atualLuzManual!=_novoLuzManual)  && (!_atualLuzAutomatica)) {
-        digitalWrite(PIN_RELELUZEXTERNA,LOW);
+
+
+// Verifica e corrige o botão de luz Externa Acessa se a Luz Automática estiver atuiva
+void verificaBotaoLuzExterna (void) {
+  if ((_atualLuzExterna!=_novoLuzExterna) && (_atualLuzAutomatica)) {
+    // Reverte o estado para o atual
+    _novoLuzExterna=_atualLuzExterna;
+    Blynk.virtualWrite(BLYNK_LUZEXTERNA,_BoolToEstado(_atualLuzExterna));
+#ifdef DEBUG
+    Serial.println("-- CORREÇÃO DE ESTADO: Tentou mudar Luz Externa com Luz Automática Ativa.");
+#endif
+  }
+}
+
+
+
+// Ajusta a Luz Manualmente SE a luz automática não estiver ativa
+void ajustaLuzExternaManual (void) {
+  if ((_atualLuzExterna!=_novoLuzExterna)  && (!_atualLuzAutomatica)) {
     
+    _atualLuzExterna=_novoLuzExterna;
+    Blynk.virtualWrite(BLYNK_LUZEXTERNA,_BoolToEstado(_atualLuzExterna));
+    
+
+    if (_atualLuzExterna) {
+      printLCD("Luz.Ext. Ligada");
+      digitalWrite(PIN_RELELUZEXTERNA,LOW);
+    } else {
+      printLCD("Luz.Ext.Deslig.");
+      digitalWrite(PIN_RELELUZEXTERNA,HIGH);
+    }
+#ifdef DEBUG
+    Serial.println("-- LUZ EXTERNA MANUAL: Mudou estado para "+String(_atualLuzExterna));
+#endif
   }
 }
 
@@ -787,8 +835,6 @@ BLYNK_CONNECTED () {
   Blynk.virtualWrite(BLYNK_IDMORADOR,_atualMorador);
   Blynk.virtualWrite(BLYNK_LUZEXTERNA,_BoolToEstado(_atualLuzExterna));
   Blynk.virtualWrite(BLYNK_LUZAUTOMATICA,_BoolToEstado(_atualLuzAutomatica));
-  Blynk.virtualWrite(BLYNK_JANELAABERTA,_BoolToEstado(_atualJanelaAberta));
-  Blynk.virtualWrite(BLYNK_PORTAABERTA,_BoolToEstado(_atualPortaAberta));
   
   // Nestes três é preciso ser o "_novo", pois o "_atual" tem -1 no início
   Blynk.virtualWrite(BLYNK_LUZINT_R,_novoLuzR);
@@ -836,23 +882,6 @@ BLYNK_WRITE(BLYNK_LUZINT_B) {
 
 
 
-BLYNK_WRITE(BLYNK_PORTAABERTA) {
-  _novoPortaAberta=param.asInt();
-#ifdef DEBUG
-  Serial.println("-->Mudança de Estado da Porta pelo Controlador. Aberta = "+String(_novoPortaAberta));
-#endif    
-}
-
-
-
-BLYNK_WRITE(BLYNK_JANELAABERTA) {
-  _novoJanelaAberta=param.asInt();
-#ifdef DEBUG
-  Serial.println("-->Mudança de Estado da Janela pelo Controlador. Aberta = "+String(_novoJanelaAberta));
-#endif    
-}
-
-
 
 BLYNK_WRITE(BLYNK_IDMORADOR) {
   int valor = param.asInt();
@@ -872,37 +901,19 @@ BLYNK_WRITE(BLYNK_IDMORADOR) {
 
 
 
-
-
-
-
 // Apenas lê o conteúdo da Luz Automática (a atualização é no novo ciclo)
 BLYNK_WRITE(BLYNK_LUZAUTOMATICA) {
   _novoLuzAutomatica=(param.asInt()!=0);
 }
 
-/*
+
+
+
 // Apenas lê o conteúdo da Luz Manual (a atualização é no novo ciclo)
 // Tem um detalhe: Se luz automática = ON, não pode mexer aqui.
 BLYNK_WRITE(BLYNK_LUZEXTERNA) {
-  bool lidoLuzManual=(param.asInt()!=0);
-  
-  if (!_novoLuzAutomatica) {
-    _novoLuzManual=lidoLuzManual;
-#ifdef DEBUG
-  Serial.print("--Redefiniu Luz Manual");
-#endif
-  } else if (lidoLuzManual!=_atualLuzManual)
-  {
-#ifdef DEBUG
-  Serial.print("--TENTOU MUDAR LUZ MANUAL, MAS NÃO PODE");
-#endif
-    if (_atualLuzManual) {
-      Blynk.virtualWrite(BLYNK_LUZEXTERNA,HIGH);
-    } else
-    {
-      Blynk.virtualWrite(BLYNK_LUZEXTERNA,LOW);
-    }
-  }
+  _novoLuzExterna=(param.asInt()!=0);
+#ifdef DEBUG  
+  Serial.println("-->Mudança via Blynk de Luz Externa. Atual = "+String(_novoLuzExterna));
+#endif    
 }
-*/
