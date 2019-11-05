@@ -21,7 +21,7 @@ Revisões
 17 - nRF24L01 - CE           (LARANJA)
 16 - nRF24L01 - CSN          (BRANCO)
 04 - RELÉ ALARME (O)                                                                                                                                                                                                                           
-02 - MO_i1 (O)   (ON-BOARD LED)
+02 - (ON-BOARD LED)
 15 - BUZZER (BIPE) (O)
 
 
