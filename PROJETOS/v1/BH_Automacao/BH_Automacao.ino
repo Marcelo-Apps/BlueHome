@@ -37,8 +37,11 @@
 
 
 // Parâmetros da Wi-Fi
-char ssid[] = "WIFI-BH";
-char pass[] = "BlueHome.IoT.2019";
+//char ssid[] = "WIFI-BH";
+//char pass[] = "BlueHome.IoT.2019";
+
+char ssid[] = "iMordor";
+char pass[] = "MyMordor2019!";
 
 
 // Chave de autenticação do Projeto no Blynk
@@ -556,7 +559,7 @@ void ajustaAmbienteMorador () {
       _novoLuzR=100;
       _novoLuzG=100;
       _novoLuzB=255;
-      _moradorNome="Faberson";
+      _moradorNome="Newton";
     } else {
       _novoLuzR=0;
       _novoLuzG=0;

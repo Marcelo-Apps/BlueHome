@@ -19,7 +19,7 @@
 // Se é depuração (gera conteudo na serial para análise)
 #define DEBUG
 
-#define MOSTRADEBUGLCD
+//#define MOSTRADEBUGLCD
 
 
 #ifdef DEBUG  
@@ -32,12 +32,16 @@
 #include <BlynkSimpleEsp32.h>
 #include <nRF24L01.h>
 #include <RF24.h>
-#include <AccelStepper.h>
+#include <Stepper.h>
 
 
 // Parâmetros da Wi-Fi
-char ssid[] = "WIFI-BH";
-char pass[] = "BlueHome.IoT.2019";
+//char ssid[] = "WIFI-BH";
+//char pass[] = "BlueHome.IoT.2019";
+
+char ssid[] = "iMordor";
+char pass[] = "MyMordor2019!";
+
 
 
 // Chave de autenticação do Projeto no Blynk
@@ -91,20 +95,22 @@ char auth[] = "UhhrKzVPwBwg-ByLNCthYxpNMTZgK41l";      // Alarme
 #define BLYNK_JANELADIRECAO       V11
 #define BLYNK_PORTADIRECAO        V12
 
-#define MOTORJANELA_RPM           200
+#define MOTORJANELA_VELOCIDADE    200
 #define MOTORJANELA_PASSOSVOLTA    20
 #define MOTORJANELA_PASSOSVEZ      20
-#define MOTORJANELA_POSFECHADA    100
-#define MOTORJANELA_POSABERTA       0
+#define MOTORJANELA_POSFECHADA      0    
+#define MOTORJANELA_POSABERTA      75
 
-#define MOTORPORTA_RPM            200
+#define MOTORPORTA_VELOCIDADE     200
 #define MOTORPORTA_PASSOSVOLTA     20 
 #define MOTORPORTA_PASSOSVEZ       30
-#define MOTORPORTA_POSFECHADA     200
+#define MOTORPORTA_POSFECHADA      70
 #define MOTORPORTA_POSABERTA        0
 
-#define MOTOR_DIRECAOABRIR         -1
-#define MOTOR_DIRECAOFECHAR         1
+#define MOTOR_DIRECAOABRIRPOR      -1
+#define MOTOR_DIRECAOFECHARPOR      1
+#define MOTOR_DIRECAOABRIRJAN       1
+#define MOTOR_DIRECAOFECHARJAN     -1
 
 #define ALARME_TEMPOESPERA      10000             // Espera 10s para tocar de novo se estiver armado...
 
@@ -130,7 +136,7 @@ String _lcdLin1, _lcdLin2;
 int _janelaPosicao, _atualJanelaDirecao, _novoJanelaDirecao, _portaPosicao, _atualPortaDirecao, _novoPortaDirecao;
 int _atualAlarmeConfig, _novoAlarmeConfig;
 bool _atualSireneTocando, _novoSireneTocando, _atualSensorPir, _novoSensorPir;
-bool _isPortaFechada, _isJanelaFechada;
+bool _isPortaFechada, _isJanelaFechada, _isPortaMovendo, _isJanelaMovendo;
  
 unsigned long _sireneInativaPorSensorAte;      // A sirene não pode ser acionada antes deste tempo por conta de Sensor
 
@@ -139,8 +145,8 @@ unsigned long _sireneInativaPorSensorAte;      // A sirene não pode ser acionad
 // ** CLASSES **
 
 // Inicializa os Motores de Passo
-AccelStepper motorJanela(AccelStepper::FULL4WIRE, PIN_MOTORJANELA_I1, PIN_MOTORJANELA_I2, PIN_MOTORJANELA_I3, PIN_MOTORJANELA_I4);
-AccelStepper motorPorta(AccelStepper::FULL4WIRE, PIN_MOTORPORTA_I1, PIN_MOTORPORTA_I2, PIN_MOTORPORTA_I3, PIN_MOTORPORTA_I4);
+Stepper motorJanela(MOTORJANELA_PASSOSVOLTA, PIN_MOTORJANELA_I1, PIN_MOTORJANELA_I3, PIN_MOTORJANELA_I2, PIN_MOTORJANELA_I4);
+Stepper motorPorta(MOTORPORTA_PASSOSVOLTA, PIN_MOTORPORTA_I1, PIN_MOTORPORTA_I3, PIN_MOTORPORTA_I2, PIN_MOTORPORTA_I4);
 
 // Inicializa o Rádio
 RF24 radio(17,16);
@@ -236,11 +242,11 @@ void inicializaContexto (void) {
 
   // Inicializa as Variáveis
   _janelaPosicao=MOTORJANELA_POSFECHADA;
-  _atualJanelaDirecao=1;
-  _novoJanelaDirecao=1;
+  _atualJanelaDirecao=MOTOR_DIRECAOFECHARJAN;
+  _novoJanelaDirecao=MOTOR_DIRECAOFECHARJAN;
   _portaPosicao=MOTORPORTA_POSFECHADA;
-  _atualPortaDirecao=1;
-  _novoPortaDirecao=1;
+  _atualPortaDirecao=MOTOR_DIRECAOFECHARPOR;
+  _novoPortaDirecao=MOTOR_DIRECAOFECHARPOR;
   _atualSireneTocando=false;
   _novoSireneTocando=false;
   _novoAlarmeConfig=ALARME_CONFIGINATIVO;
@@ -249,15 +255,14 @@ void inicializaContexto (void) {
   _novoSensorPir=false;
   _isPortaFechada=false;
   _isJanelaFechada=false;
+  _isPortaMovendo=false;
+  _isJanelaMovendo=false;  
   _sireneInativaPorSensorAte=0;
   _lcdLin1="";
   _lcdLin2="";
-  
-  // Ajusta a velocidade dos Motores
-  motorJanela.setMaxSpeed(200.0);
-  motorJanela.setAcceleration(100.0);
-  motorPorta.setMaxSpeed(200.0);
-  motorPorta.setAcceleration(100.0);
+
+  motorJanela.setSpeed(MOTORJANELA_VELOCIDADE);
+  motorPorta.setSpeed(MOTORPORTA_VELOCIDADE);  
 }
 
 
@@ -365,19 +370,19 @@ void processaMsgAutomacao () {
                                         txtLCD="Cmd: Sirene Des";
                                         break;
 
-        case MSGALARME_ABREPORTA     :  _novoPortaDirecao=MOTOR_DIRECAOABRIR;
+        case MSGALARME_ABREPORTA     :  _novoPortaDirecao=MOTOR_DIRECAOABRIRPOR;
                                         txtLCD="Cmd: Porta Abre";
                                         break;
 
-        case MSGALARME_FECHAPORTA    :  _novoPortaDirecao=MOTOR_DIRECAOFECHAR;
+        case MSGALARME_FECHAPORTA    :  _novoPortaDirecao=MOTOR_DIRECAOFECHARPOR;
                                         txtLCD="Cmd: Porta Fecha";
                                         break;
 
-        case MSGALARME_ABREJANELA    :  _novoJanelaDirecao=MOTOR_DIRECAOABRIR;
+        case MSGALARME_ABREJANELA    :  _novoJanelaDirecao=MOTOR_DIRECAOABRIRJAN;
                                         txtLCD="Cmd: Janela Abre";
                                         break;
 
-        case MSGALARME_FECHAJANELA   :  _novoJanelaDirecao=MOTOR_DIRECAOFECHAR;
+        case MSGALARME_FECHAJANELA   :  _novoJanelaDirecao=MOTOR_DIRECAOFECHARJAN;
                                         txtLCD="Cmd: Janela Fech";
                                         break;
       }
@@ -517,26 +522,53 @@ void atuaSensorPir () {
 void verificaJanela () {
   if (_atualJanelaDirecao!=_novoJanelaDirecao) {
     _atualJanelaDirecao=_novoJanelaDirecao;
+
+    printLCD("Janela "+_getStrDirecao(-_atualJanelaDirecao));
+    _isJanelaMovendo=true;
     
     Blynk.virtualWrite(BLYNK_JANELADIRECAO,_atualJanelaDirecao);
-    printLCD("Janela "+_getStrDirecao(_atualJanelaDirecao));
 #ifdef DEBUG
-    Serial.println("-- Mudou a Direcao da Janela: "+_getStrDirecao(_atualJanelaDirecao));
+    Serial.println("-- Mudou a Direcao da Janela: "+_getStrDirecao(-_atualJanelaDirecao));
 #endif
   }
 }
 
 
 
-
-// Atua na Janela de acordo com a direção, posição e status do reed
 void atuaJanela () {
-  if (((_atualJanelaDirecao>0) && (_janelaPosicao<MOTORJANELA_POSFECHADA)) || ((_atualJanelaDirecao<0) && (_janelaPosicao>MOTORJANELA_POSABERTA))) {
-    _janelaPosicao+=_atualJanelaDirecao;
-   
-//    motorJanela.step(MOTORJANELA_PASSOSVEZ*_atualJanelaDirecao);
-      motorPorta.moveTo(200);
-      motorPorta.run();
+  if (_isJanelaMovendo) {
+    if (_atualJanelaDirecao>0) {
+      if (_janelaPosicao<MOTORJANELA_POSABERTA) {
+        _janelaPosicao++;
+        motorJanela.step(MOTORJANELA_PASSOSVEZ);
+      }
+      
+      // Se chegou ao fim, para...
+      if (_janelaPosicao>=MOTORJANELA_POSABERTA) {
+        _isJanelaMovendo=false;
+      }
+    } else {
+      if (_janelaPosicao>MOTORJANELA_POSFECHADA) {
+        _janelaPosicao--;
+        motorJanela.step(-MOTORJANELA_PASSOSVEZ);
+      }
+
+      // Se chegou ao fim, para...
+      if (_janelaPosicao<=MOTORJANELA_POSFECHADA) {
+        _isJanelaMovendo=false;
+      }
+    }
+#ifdef DEBUG
+    Serial.println("  - Moveu Janela. Posicao Atual = "+String(_janelaPosicao));
+#endif
+    // Se não está mais movendo, acabou...
+    
+    if (!_isJanelaMovendo) {
+      printLCD("Janela "+_getStrDirecaoFim(-_atualJanelaDirecao));
+#ifdef DEBUG
+      Serial.println("--Janela OK. Status = "+_getStrDirecaoFim(-_atualJanelaDirecao));
+#endif
+    }
   }
 }
 
@@ -547,9 +579,12 @@ void atuaJanela () {
 void verificaPorta () {
   if (_atualPortaDirecao!=_novoPortaDirecao) {
     _atualPortaDirecao=_novoPortaDirecao;
+
+    printLCD("Porta "+_getStrDirecao(_atualPortaDirecao));
+    _isPortaMovendo=true;
     
     Blynk.virtualWrite(BLYNK_PORTADIRECAO,_atualPortaDirecao);
-    printLCD("Porta "+_getStrDirecao(_atualPortaDirecao));
+//    printLCD("Porta "+_getStrDirecao(_atualPortaDirecao));
 #ifdef DEBUG
     Serial.println("-- Mudou a Direcao da Porta: "+_getStrDirecao(_atualPortaDirecao));
 #endif
@@ -558,21 +593,43 @@ void verificaPorta () {
 
 
 
-
-// Atua na Porta de acordo com a direção, posição e status do reed
 void atuaPorta () {
-  if (((_atualPortaDirecao>0) && (_portaPosicao<MOTORPORTA_POSFECHADA)) || ((_atualPortaDirecao<0) && (_portaPosicao>MOTORPORTA_POSABERTA))) {
+  if (_isPortaMovendo) {
+    if (_atualPortaDirecao>0) {
+      if (_portaPosicao<MOTORPORTA_POSFECHADA) {
+        _portaPosicao++;
+        motorPorta.step(MOTORPORTA_PASSOSVEZ);
+      }
+      
+      // Se chegou ao fim, para...
+      if (_portaPosicao>=MOTORPORTA_POSFECHADA) {
+        _isPortaMovendo=false;
+      }
+    } else {
+      if (_portaPosicao>MOTORPORTA_POSABERTA) {
+        _portaPosicao--;
+        motorPorta.step(-MOTORPORTA_PASSOSVEZ);
+      }
 
-    if (_portaPosicao==0)
-    _portaPosicao+=_atualPortaDirecao;
-//    motorPorta.step(MOTORPORTA_PASSOSVEZ*_atualPortaDirecao);
-//    if (_portaPosicaomotorPorta.runToNewPosition(_portaPosicao);
-      motorPorta.moveTo(0);
-      motorPorta.run();
-//    motorPorta.onestep(FORWARD, SINGLE);
-//    Serial.println(_portaPosicao);
+      // Se chegou ao fim, para...
+      if (_portaPosicao<=MOTORPORTA_POSABERTA) {
+        _isPortaMovendo=false;
+      }
+    }
+#ifdef DEBUG
+    Serial.println("  - Moveu Porta. Posicao Atual = "+String(_portaPosicao));
+#endif
+    // Se não está mais movendo, acabou...
+    
+    if (!_isPortaMovendo) {
+      printLCD("Porta "+_getStrDirecaoFim(_atualPortaDirecao));
+#ifdef DEBUG
+      Serial.println("--Porta OK. Status = "+_getStrDirecaoFim(_atualPortaDirecao));
+#endif
+    }
   }
 }
+
 
 
 
@@ -708,7 +765,7 @@ BLYNK_CONNECTED () {
   Blynk.virtualWrite(BLYNK_SIRENETOCANDO,_BoolToEstado(_atualSireneTocando));
   Blynk.virtualWrite(BLYNK_ALARMECONFIG,_atualAlarmeConfig);
   Blynk.virtualWrite(BLYNK_JANELADIRECAO,_atualJanelaDirecao);
-  Blynk.virtualWrite(BLYNK_PORTADIRECAO,_atualJanelaDirecao);
+  Blynk.virtualWrite(BLYNK_PORTADIRECAO,_atualPortaDirecao);
 }
 
 

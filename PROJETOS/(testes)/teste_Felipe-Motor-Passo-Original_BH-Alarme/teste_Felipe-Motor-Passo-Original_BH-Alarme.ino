@@ -40,25 +40,25 @@ char pass[] = "BlueHome.IoT.2019";
 char auth[] = "UhhrKzVPwBwg-ByLNCthYxpNMTZgK41l";      // Alarme
 
 #define PIN_SENSORPIR              36
-#define PIN_ALARME                  4
+#define PIN_ALARME                  2
 
 #define PIN_SENSORJANELA           35
 #define PIN_SENSORPORTA            34
 
-#define PIN_CMDABRIRJANELA         26
-#define PIN_CMDFECHARJANELA        25
-#define PIN_CMDABRIRPORTA          33
-#define PIN_CMDFECHARPORTA         32
+#define PIN_CMDABRIRJANELA         4
+#define PIN_CMDFECHARJANELA        16
+#define PIN_CMDABRIRPORTA          17
+#define PIN_CMDFECHARPORTA         5
 
 #define PIN_MOTORJANELA_I1         27
 #define PIN_MOTORJANELA_I2         14
 #define PIN_MOTORJANELA_I3         12
 #define PIN_MOTORJANELA_I4         13
 
-#define PIN_MOTORPORTA_I1         2
-#define PIN_MOTORPORTA_I2         18
-#define PIN_MOTORPORTA_I3         19
-#define PIN_MOTORPORTA_I4         23
+#define PIN_MOTORPORTA_I1         32
+#define PIN_MOTORPORTA_I2         33
+#define PIN_MOTORPORTA_I3         25
+#define PIN_MOTORPORTA_I4         26
 
 // Pinos da comunicação entre Processadores
 #ifdef SEMSERIAL
@@ -150,7 +150,7 @@ void inicializaContexto (void) {
 
 void cmdAbrirPorta(void) {
   if (digitalRead(PIN_CMDABRIRPORTA)) {
-    _passoPortaAtual = 30;
+    _passoPortaAtual = 65;
   }
 }
 
@@ -162,7 +162,7 @@ void cmdFecharPorta(void) {
 
 void cmdAbrirJanela(void) {
   if (digitalRead(PIN_CMDABRIRJANELA)) {
-    _passoJanelaAtual = 30;
+    _passoJanelaAtual = 75;
   }
 }
 
@@ -193,7 +193,7 @@ void atuaNaPorta (void) {
     _passoPortaAtual--;
     // quando a variavel _passoPortaAtual chegar em 0, para a porta
     
-  } else if (_passoPortaAtual < 0 && _passoPortaAtual >= -30) { //porta fechando
+  } else if (_passoPortaAtual < 0 && _passoPortaAtual >= -65) { //porta fechando
     motorPorta.step(-_passosPorVoltaPorta);
     _passoPortaAtual--;
   }// quando a variavel _passoPortaAtual chegar em -31, para a porta
@@ -206,7 +206,7 @@ void atuaNaJanela(void) {
     _passoJanelaAtual--;
     // quando a variavel _passoJanelaAtual chegar em 0, para a janela
 
-  } else if (_passoJanelaAtual < 0 && _passoJanelaAtual >= -30) { //janela fechando
+  } else if (_passoJanelaAtual < 0 && _passoJanelaAtual >= -75) { //janela fechando
     motorJanela.step(-_passosPorVoltaJanela);
     _passoJanelaAtual--;
   }// quando a variavel _passoJanelaAtual chegar em -31, para a janela
