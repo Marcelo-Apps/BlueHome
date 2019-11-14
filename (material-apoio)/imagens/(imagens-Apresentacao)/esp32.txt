@@ -1,0 +1,4 @@
+Microcontrolador com processador de 3 cores de baixo custo e baixo consumo de energia. Com Wi-Fi e Bluetooth integrado.
+
+(É possível criar dois LOOP(), permitindo que você rode dois códigos ao mesmo tempo!
+O terceiro core do ESP32 é um ULP, que é apenas programado em Assembly.)

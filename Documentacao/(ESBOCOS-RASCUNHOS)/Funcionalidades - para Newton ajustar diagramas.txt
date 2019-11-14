@@ -1,0 +1,47 @@
+Características e Funcionalidades Implementadas no Projeto
+
+
+O projeto BlueHome, mesmo sendo uma prova de conceito, implementa as seguintes funcionalidades:
+
+- A casa é controlada por um dispositivo de controle (celular)
+O software Blynk foi utilizado para este fim, deixando mais tempo para a montagem e codificação da casa em si. A comunicação é feita via internet entre os Microcontroladores e a Nuvem do Blynk. A biblioteca Blynk do Arduino facilitou esta implementação
+
+- Os Processadores de Automação e Alarme são dispositivos independentes.
+A comunicação entre ambos os Microcontroladores (Processadores) e o dispositivo de controle celular) é feita de maneira individual. Como o Processador de Alarme também gerencia os motores da porta e da janela, criou-se a necessidade de comunicação unidirecional entre Automação e Alarme como funcionalidade básica (que precisa funcionar mesmo sem internet) p[ara este fim e para controle básico do alarme e da sirene. Eles utilizam módulos de RF para esta comunicação.
+
+- A iluminação interna (cor/intensidade) pode ser definida pelo operador
+O dispositivo de controle permite o ajuste da cor e da intensidade da iluminação da sala. A cor também é modificada para a cor padrão do morador por meio do TAG RFID (até sem acesso a internet) ou por meio da informação do morador (1-3 em nosso aplicativo) no dispositivo de controle.
+
+- É possível controlar as luzes externas de maneira automática ou manual.
+Um sensor de luminosidade instalado no teto da garagem informa ao processador de automação que escureceu ou clareou. Esta informação (escureceu/clareou) é passada para o dispositivo de controle. Se a configuração de iluminação automática estiver ativa, o relé da iluminação externa será chaveado automaticamente para ligado (escureceu) ou desligado (clareou), e neste caso não é possível ativar/desativar manualmente a iluminação externa. Se a iluminação automática estiver desativada, o controle da iluminação externa será feito pelo botão específico de liga/desliga a iluminação externa.
+
+- Se chover a janela é fechada automaticamente
+Se começar ou parar de chover, o dispositivo de controle é notificado. Caso a chuva comece, é verificado se a janela está fechada ou aberta. Se estiver fechada é informado no dispositivo de controle. Se estiver aberta, será feito o fechamento automático e o operador será informado. Como um complemento das funcionalidades, se a janela for aberta durante a chuva, esta não será fechava novamente até que a chuva pare e recomece. Isto permite ao morador manter a janela aberta.
+ 
+- Ao passar a TAG RFID válida a casa ajusta o ambiente, abre a porta e desativa o alarme
+Ao solicitar a entrada na casa por meio de uma TAG RFID válida, o ambiente da casa (atualmente é apenas a luz da sala) é ajustado conforme seus parâmetros (atualmente as Tags e as cores da iluminação estão hardcoded na programação do processador de automação), o alarme é desligado e a porta é aberta (caso esteja fechada). A autenticação positiva e o nome do morador é informada no dispositivo de controle.
+Tags inválidas são notificadas por meio de som audível (3 bipes) e o dispositivo de controle é informado da tentativa. 3 tentativas inválidas ativam a Sirene mesmo que o Alarme esteja desligado, exceto se o mesmo estiver em modo Passivo (silencioso). Ao passar uma Tag válida a contagem de Tags inválidas é zerada.
+
+- A porta e a Janela podem ser abertos/fechados pelo dispositivo de controle
+Este comando é enviado diretamente do dispositivo de controle para o Processador de Alarme.
+
+- A porta pode ser fechada a qualquer momento por um botão, mesmo sem WiFi
+Existe um botão situado para efeito de demonstração junto ao RFID, porém deveria existir nas partes interna e externa da casa, preferencialmente utilizando-se de botões capacitivos) que visa fechar a porta sem a necessidade do dispositivo de controle ou de conectividade.
+Uma funcionalidade adicional similar a esta poderia ser implementada para a janela, porém por ser uma POC e devido ao tempo curto, isto não foi implementado.
+
+- O alarme pode ficar desativado , passivo (nunca toca, só avisa o dispositivo de controle) e ativo (toca se violar o perímetro)
+O Alarme Inativo ainda pode ativar a sirene em alguns casos (atualmente apenas em caso de 3 tentativas consecutivas de RFIDs inválidos), e aceita a ativação/desativação manual da sirene. Estando inativo qualquer evento de invasão dos sensores (atualmente apenas o sensor PIR) não gera aviso nem no dispositivo de controle.
+No modo Ativo, a invasão dos sensores informa o dispositivo de controle e dispara o alarme (dependendo do evento é preciso respeitar o tempo de espera conforme explicado no próximo item).
+No modo Passivo apenas avisos são gerados. A sirene nunca é ativada (nem mesmo manualmente) durante o modo passivo.
+A mudança de estado do alarme é sinalizada por um  aviso sonoro: Ativo (3 bipes lentos), Passivo (3 bipes rápidos), Inativo (1 bipe longo), simulando o comportamento de um alarme real.
+
+- A Sirene pode ser ativada ou desativada (exceto quando está em modo Passivo)
+Ao desativar a sirene ou mudar a configuração do alarme ela fica em tempo de espera (como um alarme normal) por 10s (o tempo pequeno é por conta da apresentação). Durante este momento a invasão dos sensores (em nosso caso apenas o Sensor PIR) não dispara, porém o dispositivo de controle recebe o aviso.
+O tempo de espera da sirene não é aplicado caso ocorram 3 tentativas inválidas consecutivas de RFID.
+
+- Três RFIDs passadas consecutivamente ativam a sirene nos modos Ativo e Inativo
+Cada tentativa inválida de Tag RFID gera um aviso na parte de automação do dispositivo de controle.
+Em qualquer das 3 configurações possíveis do Alarme – Inativo, Ativo ou Passivo - três tentativas de passar RFID inválidos consecutivamente gera um aviso de Alarme no dispositivo de controle. No caso do Alarme estar configura nos modos Ativo ou Inativo a sirene irá tocar.
+
+- Existe uma pequena tela de status do Processador de Automação e uma do Alarme
+Esta “telinha”é representada por um LCD de 2x16 em cor azul para a automação e em cor âmbar para o alarme. Nela são apresentadas todas as mudanças de estado e ações tomadas ou executadas pelos dispositivos da casa.
